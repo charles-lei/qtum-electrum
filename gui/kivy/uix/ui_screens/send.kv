@@ -49,8 +49,8 @@ SendScreen:
                     pos_hint: {'center_y': .5}
                 BlueButton:
                     id: amount_e
-                    default_text: _('Amount')
-                    text: s.amount if s.amount else _('Amount')
+                    default_text: _('Amount1')
+                    text: s.amount if s.amount else _('Amount1')
                     disabled: root.is_pr
                     on_release: Clock.schedule_once(lambda dt: app.amount_dialog(s, True))
             CardSeparator:
@@ -68,7 +68,7 @@ SendScreen:
                     pos_hint: {'center_y': .5}
                 BlueButton:
                     id: description
-                    text: s.message if s.message else (_('No Description') if root.is_pr else _('Description'))
+                    text: s.message if s.message else (_('No Description') if root.is_pr else _('Description2'))
                     disabled: root.is_pr
                     on_release: Clock.schedule_once(lambda dt: app.description_dialog(s))
         BoxLayout:
