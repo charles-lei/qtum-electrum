@@ -13,7 +13,7 @@ Builder.load_string('''
 
 <TxDialog>
     id: popup
-    title: _('Transaction')
+    title: _('Transaction123')
     is_mine: True
     can_sign: False
     can_broadcast: False
@@ -61,10 +61,10 @@ Builder.load_string('''
                     size_hint: 1, None
                     id: output_list
                 TopLabel:
-                    text: _('Transaction ID') + ':' if root.tx_hash else ''
+                    text: _('Transaction345 ID') + ':' if root.tx_hash else ''
                 TxHashLabel:
                     data: root.tx_hash
-                    name: _('Transaction ID')
+                    name: _('Transaction234 ID')
         Widget:
             size_hint: 1, 0.1
 
