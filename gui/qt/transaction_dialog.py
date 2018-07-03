@@ -81,12 +81,12 @@ class TxDialog(QDialog, MessageBoxMixin):
         self.desc = desc
 
         self.setMinimumWidth(880)
-        self.setWindowTitle(_("Transaction"))
+        self.setWindowTitle(_("Transaction111"))
 
         vbox = QVBoxLayout()
         self.setLayout(vbox)
 
-        vbox.addWidget(QLabel(_("Transaction ID:")))
+        vbox.addWidget(QLabel(_("Transaction123 ID:")))
         self.tx_hash_e  = ButtonsLineEdit()
         qr_show = lambda: parent.show_qrcode(str(self.tx_hash_e.text()), 'Transaction ID', parent=self)
         self.tx_hash_e.addButton(":icons/qrcode.png", qr_show, _("Show as QR code"))
@@ -109,10 +109,10 @@ class TxDialog(QDialog, MessageBoxMixin):
 
         vbox.addStretch(1)
 
-        self.sign_button = b = QPushButton(_("Sign"))
+        self.sign_button = b = QPushButton(_("Sign1"))
         b.clicked.connect(self.sign)
 
-        self.broadcast_button = b = QPushButton(_("Broadcast"))
+        self.broadcast_button = b = QPushButton(_("Broadcast2"))
         b.clicked.connect(self.do_broadcast)
 
         self.save_button = b = QPushButton(_("Save"))
