@@ -1141,7 +1141,7 @@ class Abstract_Wallet(PrintError):
     def make_unsigned_transaction(self, inputs, outputs, config,
                                   fixed_fee=None, change_addr=None,
                                   gas_fee=0, sender=None, is_sweep=False):
-        # check outputs
+        # check outputs  _wang1
         i_max = None
         for i, o in enumerate(outputs):
             _type, data, value = o
@@ -1191,7 +1191,7 @@ class Abstract_Wallet(PrintError):
                 coin_chooser = coinchooser.CoinChooserQtum()
             else:
                 coin_chooser = coinchooser.get_coin_chooser(config)
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],  # _wang1
                                       fee_estimator, self.dust_threshold(), sender)
         else:
             sendable = sum(map(lambda x:x['value'], inputs))

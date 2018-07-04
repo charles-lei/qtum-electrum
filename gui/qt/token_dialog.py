@@ -287,6 +287,10 @@ class TokenSendDialog(QDialog, MessageBoxMixin):
             return
         self.setWindowTitle(_('Send') + " " + token.name)
         layout = TokenSendLayout(self, token, self.do_send)
+        """
+        :do_send（） is the main process for qrc20 token. wang1
+        :type token: Token
+        """
         self.setLayout(layout)
 
     def do_send(self, pay_to, amount, gas_limit, gas_price):

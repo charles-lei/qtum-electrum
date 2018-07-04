@@ -3141,13 +3141,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = TokenSendDialog(self, token)
         d.show()
 
-    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog):
+    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog): # _wang1
         try:
             datahex = 'a9059cbb{}{:064x}'.format(pay_to.zfill(64), amount)
             script = contract_script(gas_limit, gas_price, datahex, token.contract_addr, opcodes.OP_CALL)
             outputs = [(TYPE_SCRIPT, script, 0), ]
-            tx_desc = 'pay out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
+            tx_desc = 'pay wang test out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
             self._smart_contract_broadcast(outputs, tx_desc, gas_limit * gas_price, token.bind_addr, dialog)
+
+        """
+        :sign and broadcast are include in _smart_contract_broadcast() process. _wang1
+        :type token: Token
+        """
+
         except (BaseException,) as e:
             traceback.print_exc(file=sys.stderr)
             dialog.show_message(str(e))
@@ -3178,11 +3184,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # confirmation dialog
         msg = [
             _(desc),
-            _("Mining fee") + ": " + self.format_amount_and_units(fee - gas_fee),
+            _("Mining fee _wang1") + ": " + self.format_amount_and_units(fee - gas_fee),
             _("Gas fee") + ": " + self.format_amount_and_units(gas_fee),
         ]
 
-        confirm_rate = 2 * self.config.max_fee_rate()
+        confirm_rate = 2 * self.config.max_fee_rate()   # max_fee_rate() the function, _wang1
         if fee - gas_fee > confirm_rate * tx.estimated_size() / 1000:
             msg.append(_('Warning') + ': ' + _("The fee for this transaction seems unusually high."))
 
