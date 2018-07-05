@@ -3141,7 +3141,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = TokenSendDialog(self, token)
         d.show()
 
-    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog): # _wang1
+    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog): 
         try:
             datahex = 'a9059cbb{}{:064x}'.format(pay_to.zfill(64), amount)
             script = contract_script(gas_limit, gas_price, datahex, token.contract_addr, opcodes.OP_CALL)
@@ -3188,7 +3188,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             _("Gas fee") + ": " + self.format_amount_and_units(gas_fee),
         ]
 
-        confirm_rate = 2 * self.config.max_fee_rate()   # max_fee_rate() the function, _wang1
+        confirm_rate = 2 * self.config.max_fee_rate()   
         if fee - gas_fee > confirm_rate * tx.estimated_size() / 1000:
             msg.append(_('Warning') + ': ' + _("The fee for this transaction seems unusually high."))
 
