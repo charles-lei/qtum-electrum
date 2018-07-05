@@ -3146,13 +3146,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             datahex = 'a9059cbb{}{:064x}'.format(pay_to.zfill(64), amount)
             script = contract_script(gas_limit, gas_price, datahex, token.contract_addr, opcodes.OP_CALL)
             outputs = [(TYPE_SCRIPT, script, 0), ]
-            tx_desc = 'pay wang test out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
+            tx_desc = 'pay out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
             self._smart_contract_broadcast(outputs, tx_desc, gas_limit * gas_price, token.bind_addr, dialog)
-
-        """
-        :sign and broadcast are include in _smart_contract_broadcast() process. _wang1
-        :type token: Token
-        """
 
         except (BaseException,) as e:
             traceback.print_exc(file=sys.stderr)

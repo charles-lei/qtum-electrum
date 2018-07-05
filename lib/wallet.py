@@ -1141,7 +1141,7 @@ class Abstract_Wallet(PrintError):
     def make_unsigned_transaction(self, inputs, outputs, config,
                                   fixed_fee=None, change_addr=None,
                                   gas_fee=0, sender=None, is_sweep=False):
-        # check outputs  _wang1
+        # check outputs 
         i_max = None
         for i, o in enumerate(outputs):
             _type, data, value = o
