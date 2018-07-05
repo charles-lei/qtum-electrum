@@ -1191,7 +1191,7 @@ class Abstract_Wallet(PrintError):
                 coin_chooser = coinchooser.CoinChooserQtum()
             else:
                 coin_chooser = coinchooser.get_coin_chooser(config)
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],  # _wang1
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], 
                                       fee_estimator, self.dust_threshold(), sender)
         else:
             sendable = sum(map(lambda x:x['value'], inputs))
