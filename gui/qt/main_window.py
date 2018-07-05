@@ -3179,8 +3179,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # confirmation dialog
         msg = [
             _(desc),
-            _("Mining fee _wang1") + ": " + self.format_amount_and_units(fee - gas_fee),
-            _("Gas fee") + ": " + self.format_amount_and_units(gas_fee),
+            _("Mining fee wang1") + ": " + self.format_amount_and_units(fee - gas_fee),
+            _("Gas fee wang1") + ": " + self.format_amount_and_units(gas_fee),
         ]
 
         confirm_rate = 2 * self.config.max_fee_rate()   
