@@ -1162,16 +1162,16 @@ class Transaction:
                 # 和压缩公钥
                 if self.is_txin_complete(txin):
                     break
-                if pubkey in keypairs:#keypairs里面是公钥还是压缩公钥不清楚,所以通过把输入的公钥同时计算出
-                    #公钥和压缩公钥,然后判断输入的公钥或者压缩公钥是否和keypairs里面匹配
+                if pubkey in keypairs:  #keypairs里面是公钥还是压缩公钥不清楚,所以通过把输入的公钥同时计算出
+                       #公钥和压缩公钥,然后判断输入的公钥或者压缩公钥是否和keypairs里面匹配
                     _pubkey = pubkey
                 elif x_pubkey in keypairs:
                     _pubkey = x_pubkey
                 else:
                     continue
                 print_error("adding signature for", _pubkey)
-                sec, compressed = keypairs.get(_pubkey)#从keypairs得到私钥和压缩公钥
-                sig = self.sign_txin(i, sec)#对交易中的输入的第i个地址的私钥进行签名
+                sec, compressed = keypairs.get(_pubkey)   #从keypairs得到私钥和压缩公钥
+                sig = self.sign_txin(i, sec)  #对交易中的输入的第i个地址的私钥进行签名
                 self.add_signature_to_txin(i, j, sig)
         print_error("is_complete", self.is_complete())
         self.raw = self.serialize()

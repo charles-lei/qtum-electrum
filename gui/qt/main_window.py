@@ -1491,9 +1491,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             with open('./debug_info.txt', 'a') as f:
                 try:
-                    f.write('wallet_info:' + str(self.wallet.__class__.__name__) + '\n')
+                    f.write('file_name:qt/main_window.py,function_name:sign_tx_with_password:' + '\n' + 'step1:wallet_info:' + str(self.wallet.__class__.__name__) + '\n')
                 except:
-                    f.write('wallet_info:can not get ' + 'self.wallet.__class__.__name__'+ '\n')
+                    f.write('file_name:qt/main_window.py,function_name:sign_tx_with_password:' + 'step1 False:wallet_info:can not get ' + 'self.wallet.__class__.__name__'+ '\n')
 
             run_hook('sign_tx', self, tx)
             task = partial(self.wallet.sign_transaction, tx, password)

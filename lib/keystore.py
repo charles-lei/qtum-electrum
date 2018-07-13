@@ -52,6 +52,13 @@ class KeyStore(PrintError):
 
     def get_tx_derivations(self, tx):
         keypairs = {}
+        with open('./debug_info.txt', 'a') as f:
+            try:
+                f.write(
+                    'file_name:keystore.py,function_name:get_tx_derivation:' + '\n' + 'step4:' + 'sign_transaction -> get_tx_derivation' + '\n')
+            except:
+                f.write(
+                    'file_name:keystore.py,function_name:get_tx_derivation:' + '\n' + 'step4 False:' + 'sign_transaction -> get_tx_derivation' + '\n')
         for txin in tx.inputs():#交易输入中的每一个输入
             num_sig = txin.get('num_sig')#?这个输入中数字签名的个数
             if num_sig is None:#num_sig为空 看下一个txin
@@ -72,6 +79,12 @@ class KeyStore(PrintError):
                 if not derivation:
                     continue
                 keypairs[x_pubkey] = derivation #keypairs字典:字典的键:x_pubkey,字典的值:对应的地址
+        with open('./debug_info.txt', 'a') as f:
+            try:
+                f.write('file_name:keystore.py,function_name:get_tx_derivation:' + '\n' + 'The value of params keypairs:' + str(keypairs) + '\n')
+            except:
+                f.write(
+                    'file_name:keystore.py,function_name:get_tx_derivation:' + '\n' + 'The value of params keypairs:' + 'can not get it'+'\n')
         return keypairs
 
     def can_sign(self, tx):
@@ -106,6 +119,12 @@ class Software_KeyStore(KeyStore):
         if self.is_watching_only():
             return
         # Raise if password is not correct.
+        with open('./debug_info.txt', 'a') as f:
+                try:
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' +'step3:' + 'keystore.sign_transactions'+'\n')
+                except:
+                    f.write('file_name:keystore.py,function_name:sign_transaction:'+'\n'+'step3 False:'+'keystore.sign_transactions'+'\n')
+
         self.check_password(password)
         #对TX中每个的公钥进行验证,keypairs中的都经过了验证
         keypairs = self.get_tx_derivations(tx)
@@ -114,6 +133,14 @@ class Software_KeyStore(KeyStore):
             keypairs[k] = self.get_private_key(v, password)
         # Sign
         if keypairs:
+            with open('./debug_info.txt', 'a') as f:
+                try:
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the value of keypairs:' + str(keypairs) + '\n')
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the Class name of tx:'+str(tx.__class__.name)+'\n')
+                except:
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the value of keypairs:' + 'Not Found' + '\n')
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the class name of tx:' + "Not Found" + '\n')
+
             tx.sign(keypairs)
 
 
@@ -174,6 +201,13 @@ class Imported_KeyStore(Software_KeyStore):
         #公钥使用p2pkh算法生成地址,如果keypairs中的元素生成的地址有一个与x_public生成的
         # 地址一样,那么就返回对应得keypairs里面的pubkey元素
         #非压缩公钥是04开头压缩公钥是02或03开头。
+        with open('./debug_info.txt', 'a') as f:
+            try:
+                f.write(
+                    'file_name:keystore.py,function_name:Imported_KeyStore.get_pubkey_derivation:' + '\n' + 'step5:' + 'get_tx_derivation -> get_pubkey_derivation' + '\n')
+            except:
+                f.write(
+                    'file_name:keystore.py,function_name:Imported_KeyStore.get_pubkey_derivation:' + '\n' + 'step5 False:' + 'get_tx_derivation -> get_pubkey_derivation' + '\n')
         if x_pubkey[0:2] in ['02', '03', '04']:
             if x_pubkey in self.keypairs.keys():
                 return x_pubkey
@@ -705,6 +739,14 @@ def parse_xpubkey(x_pubkey):
 
 def xpubkey_to_address(x_pubkey):
     #根据不同的币种的公钥来生成不同币种的地址
+    with open('./debug_info.txt', 'a') as f:
+        try:
+            f.write(
+                'file_name:keystore.py,function_name:xpubkey_to_address:' + '\n' + 'step6:' + 'get_pubkey_derivation -> xpubkey_to_address' + '\n')
+        except:
+            f.write(
+                'file_name:keystore.py,function_name:xpubkey_to_address:' + '\n' + 'step6 False:' + 'get_pubkey_derivation -> xpubkey_to_address' + '\n')
+
     if x_pubkey[0:2] == 'fd':#其他币的地址前缀
         # TODO: check that ord() is OK here
         addrtype = ord(bfh(x_pubkey[2:4]))#
