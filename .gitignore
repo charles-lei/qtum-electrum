@@ -1,0 +1,27 @@
+####-*.patch
+*.pyc
+*.swp
+build/
+dist/
+*.egg/
+.eggs/
+/electrum.py
+contrib/pyinstaller/
+Electrum.egg-info/
+Qtum_Electrum.egg-info/
+gui/qt/icons_rc.py
+locale/
+app.fil
+.devlocaltmp/
+*_trial_temp
+packages
+env/
+.tox/
+.buildozer/
+bin/
+lib/paymentrequest_pb2.py
+# tox files
+.cache/
+.coverage
+
+.idea/

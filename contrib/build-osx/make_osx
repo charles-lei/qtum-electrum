@@ -1,0 +1,113 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+BLUE='\033[0,34m'
+NC='\033[0m' # No Color
+function info {
+	printf "\r💬 ${BLUE}INFO:${NC} ${1}\n"
+}
+function fail {
+    printf "\r🗯 ${RED}ERROR:${NC} ${1}\n"
+    exit 1
+}
+
+build_dir=$(dirname "$0")
+test -n "$build_dir" -a -d "$build_dir" || exit
+cd $build_dir/../..
+
+export PYTHONHASHSEED=22
+PYTHON_VERSION=3.6.2
+VERSION=`git describe --tags`
+STAGING_DIR="dist"
+VOL_NAME="Qtum Electrum"
+TEMP_DMG_NAME="/tmp/qtum-electrum.dmg"
+DMG_NAME="${STAGING_DIR}/Qtum-electrum-osx-${VERSION}.dmg"
+LIBSECP_VERSION=452d8e4d2a2f9f1b5be6b02e18f1ba102e5ca0b4
+# export http_proxy=http://127.0.0.1:1087;export https_proxy=http://127.0.0.1:1087;
+
+rm -rf ${STAGING_DIR} ${TEMP_DMG_NAME}
+
+download_if_not_exist() {
+    local file_name=$1 url=$2
+    if [ ! -e $file_name ] ; then
+        wget -O $PWD/$file_name "$url"
+    fi
+}
+
+which brew > /dev/null 2>&1 || fail "Please install brew from https://brew.sh/ to continue"
+
+info "Installing Python $PYTHON_VERSION"
+export PATH="~/.pyenv/bin:~/.pyenv/shims:~/Library/Python/3.6/bin:$PATH"
+if [ -d "~/.pyenv" ]; then
+  pyenv update
+else
+  curl -L https://raw.githubusercontent.com/pyenv/pyenv-installer/master/bin/pyenv-installer | bash > /dev/null 2>&1
+fi
+PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install -s $PYTHON_VERSION && \
+pyenv global $PYTHON_VERSION || fail "Unable to use Python $PYTHON_VERSION"
+
+info "Installing pyinstaller"
+python3 -m pip install git+https://github.com/ecdsa/pyinstaller@fix_2952 --user || fail "Could not install pyinstaller"
+
+info "Using these versions for building $PACKAGE:"
+sw_vers
+python3 --version
+echo -n "Pyinstaller "
+pyinstaller --version
+
+if [ ! -e contrib/build-osx/libusb-1.0.dylib ] ; then
+    info "Downloading libusb..."
+    curl https://homebrew.bintray.com/bottles/libusb-1.0.22.el_capitan.bottle.tar.gz | \
+    tar xz --directory /tmp/
+    cp /tmp/libusb/1.0.22/lib/libusb-1.0.dylib contrib/build-osx
+fi
+
+info "Building libsecp256k1"
+brew install autoconf automake libtool
+git clone https://github.com/bitcoin-core/secp256k1 /tmp/secp256k1
+pushd /tmp/secp256k1
+git reset --hard $LIBSECP_VERSION
+git clean -f -x -q
+./autogen.sh
+./configure --enable-module-recovery --enable-experimental --enable-module-ecdh --disable-jni
+make
+popd
+cp /tmp/secp256k1/.libs/libsecp256k1.0.dylib contrib/build-osx
+
+info "Installing requirements..."
+python3 -m pip install -r ./requirements.txt --user && \
+python3 -m pip install -r ./requirements-binaries.txt --user && \
+python3 -m pip install -r ./requirements-fixed.txt --user || \
+fail "Could not install requirements"
+
+
+info "Building $PACKAGE..."
+python3 setup.py install --user > /dev/null || fail "Could not build $PACKAGE"
+
+
+info "Faking timestamps..."
+for d in ~/Library/Python/ ~/.pyenv .; do
+  pushd $d
+  find . -exec touch -t '200101220000' {} +
+  popd
+done
+
+
+info "Building binary"
+pyinstaller --noconfirm --ascii --clean --name $VERSION contrib/build-osx/osx.spec || fail "Could not build binary"
+
+
+hdiutil create -size 300m -fs HFS+ -volname "${VOL_NAME}" -ov ${TEMP_DMG_NAME}
+
+hdiutil mount ${TEMP_DMG_NAME}
+cp -R "dist/${VOL_NAME}.app" "/Volumes/${VOL_NAME}/${VOL_NAME}.app"
+ln -s /Applications "/Volumes/${VOL_NAME}/Applications"
+
+hdiutil detach "/Volumes/${VOL_NAME}"
+sleep 2
+
+hdiutil convert ${TEMP_DMG_NAME} -format UDZO -o ${DMG_NAME}
+hdiutil internet-enable -yes ${DMG_NAME}
+rm -rf ${TEMP_DMG_NAME}
+
+openssl dgst -sha256 ${DMG_NAME}
