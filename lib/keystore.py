@@ -52,23 +52,26 @@ class KeyStore(PrintError):
 
     def get_tx_derivations(self, tx):
         keypairs = {}
-        for txin in tx.inputs():
-            num_sig = txin.get('num_sig')
-            if num_sig is None:
+        for txin in tx.inputs():#交易输入中的每一个输入
+            num_sig = txin.get('num_sig')#?这个输入中数字签名的个数
+            if num_sig is None:#num_sig为空 看下一个txin
                 continue
-            x_signatures = txin['signatures']
+            x_signatures = txin['signatures']#txin的签名
+            # 保留所有签名不为空的签名
             signatures = [sig for sig in x_signatures if sig]
-            if len(signatures) == num_sig:
+            if len(signatures) == num_sig:#
                 # input is complete
                 continue
             for k, x_pubkey in enumerate(txin['x_pubkeys']):
+                #交易中的压缩公钥
                 if x_signatures[k] is not None:
                     # this pubkey already signed
                     continue
+                # derivation  = 公钥
                 derivation = self.get_pubkey_derivation(x_pubkey)
                 if not derivation:
                     continue
-                keypairs[x_pubkey] = derivation
+                keypairs[x_pubkey] = derivation #keypairs字典:字典的键:x_pubkey,字典的值:对应的地址
         return keypairs
 
     def can_sign(self, tx):
@@ -104,9 +107,10 @@ class Software_KeyStore(KeyStore):
             return
         # Raise if password is not correct.
         self.check_password(password)
-        # Add private keys
+        #对TX中每个的公钥进行验证,keypairs中的都经过了验证
         keypairs = self.get_tx_derivations(tx)
-        for k, v in keypairs.items():
+        # Add private keys
+        for k, v in keypairs.items(): # k:x_pubkey v:pubkey
             keypairs[k] = self.get_private_key(v, password)
         # Sign
         if keypairs:
@@ -152,6 +156,11 @@ class Imported_KeyStore(Software_KeyStore):
         self.keypairs.pop(key)
 
     def get_private_key(self, pubkey, password):
+        #keypairs[pubkey]:使用password加密过的私钥
+        #因此 ,首先使用password对其进行解密获取私钥
+        #由password解密获取的私钥来生成公钥,并判断是否与给定的公钥pubkey一致
+        #如果一致则返回私钥,与私钥是否压缩
+        #使用keypairs[pubkey],password进行解码
         sec = pw_decode(self.keypairs[pubkey], password)
         txin_type, privkey, compressed = deserialize_privkey(sec)
         # this checks the password
@@ -160,13 +169,21 @@ class Imported_KeyStore(Software_KeyStore):
         return privkey, compressed
 
     def get_pubkey_derivation(self, x_pubkey):
+        # 主要功能是对public_key进行进行验证,如果是比特币公钥,就判断它是否在
+        #keypairs里面,如果是其他币的公钥,对该公钥生成地址,同时对所有Keypairs里面的
+        #公钥使用p2pkh算法生成地址,如果keypairs中的元素生成的地址有一个与x_public生成的
+        # 地址一样,那么就返回对应得keypairs里面的pubkey元素
+        #非压缩公钥是04开头压缩公钥是02或03开头。
         if x_pubkey[0:2] in ['02', '03', '04']:
             if x_pubkey in self.keypairs.keys():
                 return x_pubkey
+            #前缀为'fd'
         elif x_pubkey[0:2] == 'fd':
             # fixme: this assumes p2pkh
+            #假设了由公钥生成地址使用了p2pkh算法
             _, addr = xpubkey_to_address(x_pubkey)
             for pubkey in self.keypairs.keys():
+                #对地址准确性进行验证
                 if public_key_to_p2pkh(bfh(pubkey)) == addr:
                     return pubkey
 
@@ -661,8 +678,20 @@ def xtype_from_derivation(derivation):
         return 'p2wpkh'
     elif derivation.startswith("m/49'"):
         return 'p2wpkh-p2sh'
-    else:
+    elif derivation.startswith("m/44'"):
         return 'standard'
+    elif derivation.startswith("m/45'"):
+        return 'standard'
+
+    bip32_indices = list(bip32_derivation(derivation))
+    if len(bip32_indices) >= 4:
+        if bip32_indices[0] == 48 + BIP32_PRIME:
+            # m / purpose' / coin_type' / account' / script_type' / change / address_index
+            script_type_int = bip32_indices[3] - BIP32_PRIME
+            script_type = PURPOSE48_SCRIPT_TYPES_INV.get(script_type_int)
+            if script_type is not None:
+                return script_type
+    return 'standard'
 
 # extended pubkeys
 def is_xpubkey(x_pubkey):
@@ -675,13 +704,14 @@ def parse_xpubkey(x_pubkey):
 
 
 def xpubkey_to_address(x_pubkey):
-    if x_pubkey[0:2] == 'fd':
+    #根据不同的币种的公钥来生成不同币种的地址
+    if x_pubkey[0:2] == 'fd':#其他币的地址前缀
         # TODO: check that ord() is OK here
-        addrtype = ord(bfh(x_pubkey[2:4]))
+        addrtype = ord(bfh(x_pubkey[2:4]))#
         hash160 = bfh(x_pubkey[4:])
-        address = bitcoin.hash160_to_b58_address(hash160, addrtype)
+        address = bitcoin.hash160_to_b58_address(hash160, addrtype)#按照地址类型对地址进行编码
         return x_pubkey, address
-    if x_pubkey[0:2] in ['02', '03', '04']:
+    if x_pubkey[0:2] in ['02', '03', '04']:#比特币的公钥
         pubkey = x_pubkey
     elif x_pubkey[0:2] == 'ff':
         xpub, s = BIP32_KeyStore.parse_xpubkey(x_pubkey)
@@ -690,6 +720,7 @@ def xpubkey_to_address(x_pubkey):
         mpk, s = Old_KeyStore.parse_xpubkey(x_pubkey)
         pubkey = Old_KeyStore.get_pubkey_from_mpk(mpk, s[0], s[1])
     else:
+        #不能解析
         raise QtumException("Cannot parse pubkey. prefix: {}"
                             .format(x_pubkey[0:2]))
     if pubkey:
@@ -746,6 +777,17 @@ is_private = lambda x: is_seed(x) or is_xprv(x) or is_private_key_list(x)
 is_master_key = lambda x: is_old_mpk(x) or is_xprv(x) or is_xpub(x)
 is_private_key = lambda x: is_xprv(x) or is_private_key_list(x)
 is_bip32_key = lambda x: is_xprv(x) or is_xpub(x)
+
+
+def purpose48_derivation(account_id: int, xtype: str) -> str:
+    # m / purpose' / coin_type' / account' / script_type' / change / address_index
+    bip43_purpose = 48
+    coin = constants.net.BIP44_COIN_TYPE
+    account_id = int(account_id)
+    script_type_int = PURPOSE48_SCRIPT_TYPES.get(xtype)
+    if script_type_int is None:
+        raise Exception('unknown xtype: {}'.format(xtype))
+    return "m/%d'/%d'/%d'/%d'" % (bip43_purpose, coin, account_id, script_type_int)
 
 
 def bip44_derivation(account_id, bip43_purpose=44):

@@ -368,14 +368,15 @@ class ECPrivkey(ECPubkey):
         return privkey_32bytes
 
     def sign(self, data: bytes, sigencode=None, sigdecode=None) -> bytes:
-        if sigencode is None:
+        if sigencode is None:#签名编码为空
             sigencode = sig_string_from_r_and_s
         if sigdecode is None:
             sigdecode = get_r_and_s_from_sig_string
         private_key = _MySigningKey.from_secret_exponent(self.secret_scalar, curve=SECP256k1)
-        sig = private_key.sign_digest_deterministic(data, hashfunc=hashlib.sha256, sigencode=sigencode)
+        sig = private_key.sign_digest_deterministic(data, hashfunc=hashlib.sha256, sigencode=sigencode)#对sha处理过的摘要信息
         public_key = private_key.get_verifying_key()
         if not public_key.verify_digest(sig, data, sigdecode=sigdecode):
+            #签名提取出来使用公钥解密,若能够解密,则返回签名
             raise Exception('Sanity check verifying our own signature failed.')
         return sig
 

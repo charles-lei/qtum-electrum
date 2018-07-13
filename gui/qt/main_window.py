@@ -296,7 +296,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def on_error(self, exc_info):
         if not isinstance(exc_info[1], UserCancelled):
-            traceback.print_exception(*exc_info)
+            try:
+                traceback.print_exception(*exc_info)
+            except OSError:
+                pass
             self.show_error(str(exc_info[1]))
 
     def on_network(self, event, *args):
@@ -1339,10 +1342,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return request_password
 
     def read_send_tab(self):
+        #
         if self.payment_request and self.payment_request.has_expired():
             self.show_error(_('Payment request has expired'))
             return
-        label = self.message_e.text()
+        label = self.message_e.text()#?
 
         if self.payment_request:
             outputs = self.payment_request.get_outputs()
@@ -1387,11 +1391,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if run_hook('abort_send', self):
             return
         r = self.read_send_tab()
-        if not r:
+        if not r:#  r = None 时return
             return
         outputs, fee, tx_desc, coins = r
         try:
             is_sweep = bool(self.tx_external_keypairs)
+            #先制造一个无签名交易
             tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, is_sweep=is_sweep)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
@@ -1459,6 +1464,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
+        '''在单独的线程中签名交易。 完成后，使用True或False调用回调后续代码。'''
         # call hook to see if plugin needs gui interaction
 
         def on_signed(result):
@@ -1468,12 +1474,30 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             callback(False)
 
         if self.tx_external_keypairs:
+            """-----debug information-----"""
+
+            with open('./debug_info.txt','a') as f:
+                try:
+                    f.write('tx_external_keypairs:'+str(self.tx_external_keypairs)+'\n')
+                    f.write('Transaction.sign_info:' + str(Transaction.__class__.__name__) + '\n')
+                except:
+                    f.write('tx_external_keypairs: can not get' + 'self.tx_external_keypairs' + '\n')
+                    f.write('Transaction.sign_info:not found' + 'Transaction.__class__.__name__' + '\n')
             # can sign directly
-            task = partial(Transaction.sign, tx, self.tx_external_keypairs)
+            task = partial(Transaction.sign, tx, self.tx_external_keypairs)#
         else:
             # call hook to see if plugin needs gui interaction
+            """-----debug information-----"""
+
+            with open('./debug_info.txt', 'a') as f:
+                try:
+                    f.write('wallet_info:' + str(self.wallet.__class__.__name__) + '\n')
+                except:
+                    f.write('wallet_info:can not get ' + 'self.wallet.__class__.__name__'+ '\n')
+
             run_hook('sign_tx', self, tx)
             task = partial(self.wallet.sign_transaction, tx, password)
+
         WaitingDialog(self, _('Signing transaction...'), task,
                       on_signed, on_failed)
 
@@ -1485,7 +1509,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if pr and pr.has_expired():
                 self.payment_request = None
                 return False, _("Payment request has expired")
-            status, msg =  self.network.broadcast(tx)
+            status, msg = self.network.broadcast_transaction(tx)
             if pr and status is True:
                 self.invoices.set_paid(pr, tx.txid())
                 self.invoices.save()
@@ -2217,7 +2241,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if ok and txid:
             txid = str(txid).strip()
             try:
-                r = self.network.synchronous_get(('blockchain.transaction.get',[txid]))
+                r = self.network.get_transaction(txid)
             except BaseException as e:
                 self.show_message(str(e))
                 return
@@ -3141,14 +3165,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = TokenSendDialog(self, token)
         d.show()
 
-    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog): 
+    def do_token_pay(self, token, pay_to, amount, gas_limit, gas_price, dialog):
         try:
             datahex = 'a9059cbb{}{:064x}'.format(pay_to.zfill(64), amount)
             script = contract_script(gas_limit, gas_price, datahex, token.contract_addr, opcodes.OP_CALL)
             outputs = [(TYPE_SCRIPT, script, 0), ]
             tx_desc = 'pay out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
             self._smart_contract_broadcast(outputs, tx_desc, gas_limit * gas_price, token.bind_addr, dialog)
-
         except (BaseException,) as e:
             traceback.print_exc(file=sys.stderr)
             dialog.show_message(str(e))
@@ -3179,11 +3202,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # confirmation dialog
         msg = [
             _(desc),
-            _("Mining fee wang1") + ": " + self.format_amount_and_units(fee - gas_fee),
-            _("Gas fee wang1") + ": " + self.format_amount_and_units(gas_fee),
+            _("Mining fee") + ": " + self.format_amount_and_units(fee - gas_fee),
+            _("Gas fee") + ": " + self.format_amount_and_units(gas_fee),
         ]
 
-        confirm_rate = 2 * self.config.max_fee_rate()   
+        confirm_rate = 2 * self.config.max_fee_rate()
         if fee - gas_fee > confirm_rate * tx.estimated_size() / 1000:
             msg.append(_('Warning') + ': ' + _("The fee for this transaction seems unusually high."))
 
@@ -3236,7 +3259,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def call_smart_contract(self, address, abi, args, sender, dialog):
         data = eth_abi_encode(abi, args)
         try:
-            result = self.network.synchronous_get(('blockchain.contract.call', [address, data, sender]), timeout=10)
+            result = self.network.call_contract(address, data, sender)
         except BaseException as e:
             dialog.show_message(str(e))
             return

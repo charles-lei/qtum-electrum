@@ -133,12 +133,6 @@ class Synchronizer(ThreadJob):
         # tx_fees
         tx_fees = [(item['tx_hash'], item.get('fee')) for item in result]
         tx_fees = dict(filter(lambda x:x[1] is not None, tx_fees))
-        # Note if the server hasn't been patched to sort the items properly
-        if hist != sorted(hist, key=lambda x:x[1]):
-            interface = self.network.interface
-            # note: we don't actually know which interface was used if it was *just* changed
-            if interface:
-                interface.print_error("serving improperly sorted address histories")
 
         # Check that txids are unique
         if len(hashes) != len(result):
@@ -161,12 +155,15 @@ class Synchronizer(ThreadJob):
         if not params:
             return
         tx_hash = params[0]
-        #assert tx_hash == hash_encode(Hash(bytes.fromhex(result)))
         tx = Transaction(result)
         try:
             tx.deserialize()
         except Exception:
             self.print_msg("cannot deserialize transaction, skipping", tx_hash)
+            return
+        if tx_hash != tx.txid():
+            self.print_error("received tx does not match expected txid ({} != {})"
+                             .format(tx_hash, tx.txid()))
             return
         tx_height = self.requested_tx.pop(tx_hash)
         self.wallet.receive_tx_callback(tx_hash, tx, tx_height)
@@ -179,15 +176,15 @@ class Synchronizer(ThreadJob):
 
     def request_missing_txs(self, hist):
         # "hist" is a list of [tx_hash, tx_height] lists
-        requests = []
+        transaction_hashes = []
         for tx_hash, tx_height in hist:
             if tx_hash in self.requested_tx:
                 continue
             if tx_hash in self.wallet.transactions:
                 continue
-            requests.append(('blockchain.transaction.get', [tx_hash]))
+            transaction_hashes.append(tx_hash)
             self.requested_tx[tx_hash] = tx_height
-        self.network.send(requests, self.on_tx_response)
+        self.network.get_transactions(transaction_hashes, self.on_tx_response)
 
     def add_token(self, token):
         with self.lock:
@@ -274,16 +271,16 @@ class Synchronizer(ThreadJob):
 
     def request_missing_tx_receipts(self, hist):
         # "hist" is a list of [tx_hash, tx_height, log_index] lists
-        requests = []
+        tx_hashs = []
         for tx_hash, tx_height, log_index in hist:
             if tx_hash in self.requested_tx_receipt:
                 continue
             if tx_hash in self.wallet.tx_receipt:
                 continue
-            requests.append(('blochchain.transaction.get_receipt', [tx_hash]))
+            tx_hashs.append(tx_hash)
             self.requested_tx_receipt[tx_hash] = tx_height
 
-        self.network.send(requests, self.on_tx_receipt_response)
+        self.network.get_transactions_receipt(tx_hashs, self.on_tx_receipt_response)
 
     def on_tx_receipt_response(self, response):
         if self.wallet.synchronizer is None and self.initialized:
@@ -307,15 +304,15 @@ class Synchronizer(ThreadJob):
 
     def request_missing_token_txs(self, hist):
         # "hist" is a list of [tx_hash, tx_height, log_index] lists
-        requests = []
+        tx_hashs = []
         for tx_hash, tx_height, log_index in hist:
             if tx_hash in self.requested_token_txs:
                 continue
             if tx_hash in self.wallet.token_txs:
                 continue
-            requests.append(('blockchain.transaction.get', [tx_hash]))
+            tx_hashs.append(tx_hash)
             self.requested_token_txs[tx_hash] = tx_height
-        self.network.send(requests, self.on_token_tx_response)
+        self.network.get_transactions(tx_hashs, self.on_token_tx_response)
 
     def on_token_tx_response(self, response):
         if self.wallet.synchronizer is None and self.initialized:

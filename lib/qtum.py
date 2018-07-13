@@ -55,23 +55,33 @@ COIN = 100000000
 TOTAL_COIN_SUPPLY_LIMIT_IN_BTC = 100664516
 
 # supported types of transction outputs
-TYPE_ADDRESS = 0
-TYPE_PUBKEY  = 1
-TYPE_SCRIPT  = 2
+TYPE_ADDRESS = 0#键入地址
+TYPE_PUBKEY  = 1#键入公钥
+TYPE_SCRIPT  = 2#键入脚本
 
 
-def rev_hex(s):
-    return bh2u(bfh(s)[::-1])
+def rev_hex(s): #-> 16进制字符串,逆序
+    return bh2u(bfh(s)[::-1])#bfh = bytes.fromhex:将两个字符的16进制转为字节
+    #bfh: Create a bytes object from a string of hexadecimal numbers.
+    #bfh字符转化为字节,bh2u
+    """
+        str with hex representation of a bytes-like object
+        >>> x = bytes((1, 2, 10))
+        >>> bh2u(x)
+        '01020A'
+        :param x: bytes
+        :rtype: str
+        """
 
 
 def int_to_hex(i: int, length: int=1) -> str:
     assert isinstance(i, int)
-    range_size = pow(256, length)
+    range_size = pow(256, length)#??范围大小256^length??
     if i < -range_size / 2 or i >= range_size:
         raise OverflowError('cannot convert int {} to hex ({} bytes)'.format(i, length))
     if i < 0:
         i = range_size + i
-    s = hex(i)[2:].rstrip('L')
+    s = hex(i)[2:].rstrip('L')#[2:]去除0x前缀,rstrip('L'):
     s = "0"*(2*length - len(s)) + s
     return rev_hex(s)
 
@@ -223,10 +233,13 @@ def hash160_to_p2sh(h160):
 
 
 def public_key_to_p2pkh(public_key: bytes) -> str:
+    #public_key:参数.该参数的注释是bytes;
+    #该函数的返回值的注释是:str,即返回的是字符串类型
     return hash160_to_p2pkh(hash_160(public_key))
 
 
 def hash160_to_segwit_addr(h160):
+    #隔离见证地址
     return segwit_addr.encode(constants.net.SEGWIT_HRP, 0, h160)
 
 
@@ -328,10 +341,10 @@ def base_encode(v: bytes, base: int) -> str:
         chars = __b43chars
     long_value = 0
     for (i, c) in enumerate(v[::-1]):
-        long_value += (256**i) * c
+        long_value += (256**i) * c # 计算v的值,(256**i), c
     result = bytearray()
     while long_value >= base:
-        div, mod = divmod(long_value, base)
+        div, mod = divmod(long_value, base)#Return the tuple (x//y, x%y)
         result.append(chars[mod])
         long_value = div
     result.append(chars[long_value])
@@ -385,6 +398,7 @@ class InvalidChecksum(Exception):
     pass
 
 def EncodeBase58Check(vchIn):
+    #vch:prefix+private key
     hash = Hash(vchIn)
     return base_encode(vchIn + hash[0:4], base=58)
 
@@ -402,8 +416,8 @@ def DecodeBase58Check(psz):
 
 
 # extended key export format for segwit
-
-SCRIPT_TYPES = {
+#segwit 的扩展密钥导出格式
+WIF_SCRIPT_TYPES = {
     'p2pkh': 0,
     'p2wpkh': 1,
     'p2wpkh-p2sh': 2,
@@ -411,17 +425,28 @@ SCRIPT_TYPES = {
     'p2wsh': 6,
     'p2wsh-p2sh': 7
 }
+WIF_SCRIPT_TYPES_INV = inv_dict(WIF_SCRIPT_TYPES)
+
+
+PURPOSE48_SCRIPT_TYPES = {
+    'p2wsh-p2sh': 1,  # specifically multisig
+    'p2wsh': 2,       # specifically multisig
+}
+PURPOSE48_SCRIPT_TYPES_INV = inv_dict(PURPOSE48_SCRIPT_TYPES)
 
 
 def serialize_privkey(secret: bytes, compressed: bool, txin_type: str, internal_use: bool=False) -> str:
     # we only export secrets inside curve range
+    #我们只在曲线范围内导出密钥
+    #?inter_use
     secret = ecc.ECPrivkey.normalize_secret_bytes(secret)
     if internal_use:
-        prefix = bytes([(SCRIPT_TYPES[txin_type] + constants.net.WIF_PREFIX) & 255])
+        #bin(255) = '0b11111111' = '0xff'
+        prefix = bytes([(WIF_SCRIPT_TYPES[txin_type] + constants.net.WIF_PREFIX) & 255])#?
     else:
         prefix = bytes([constants.net.WIF_PREFIX])
-    suffix = b'\01' if compressed else b''
-    vchIn = prefix + secret + suffix
+    suffix = b'\01' if compressed else b''#suffix:后缀,如果压缩的话后缀加01
+    vchIn = prefix + secret + suffix #
     base58_wif = EncodeBase58Check(vchIn)
     if internal_use:
         return base58_wif
@@ -435,19 +460,18 @@ def deserialize_privkey(key: str) -> (str, bytes, bool):
     txin_type = None
     if ':' in key:
         txin_type, key = key.split(sep=':', maxsplit=1)
-        assert txin_type in SCRIPT_TYPES
+        assert txin_type in WIF_SCRIPT_TYPES
     try:
         vch = DecodeBase58Check(key)
     except BaseException:
-        neutered_privkey = str(key)[:3] + '..' + str(key)[-2:]
+        neutered_privkey = str(key)[:3] + '..' + str(key)[-2:]#
         raise Exception("cannot deserialize", neutered_privkey)
 
     if txin_type is None:
         # keys exported in version 3.0.x encoded script type in first byte
         prefix_value = vch[0] - constants.net.WIF_PREFIX
-        inverse_script_types = inv_dict(SCRIPT_TYPES)
         try:
-            txin_type = inverse_script_types[prefix_value]
+            txin_type = WIF_SCRIPT_TYPES_INV[prefix_value]
         except KeyError:
             raise Exception('invalid prefix ({}) for WIF key (1)'.format(vch[0]))
     else:
@@ -457,7 +481,7 @@ def deserialize_privkey(key: str) -> (str, bytes, bool):
 
     if len(vch) not in [33, 34]:
         raise Exception('invalid vch len for WIF key: {}'.format(len(vch)))
-    compressed = len(vch) == 34
+    compressed = len(vch) == 34  # 根据vch的长度来判断是否压缩
     secret_bytes = vch[1:33]
     # we accept secrets outside curve range; cast into range here:
     secret_bytes = ecc.ECPrivkey.normalize_secret_bytes(secret_bytes)
@@ -518,13 +542,13 @@ def is_private_key(key):
 
 
 def is_hash160(addr):
-    if not addr:
+    if not addr:#addr为空
         return False
-    if not isinstance(addr, str):
+    if not isinstance(addr, str):#addr不是字符串
         return False
-    if not len(addr) == 40:
+    if not len(addr) == 40:#addr长度不为40
         return False
-    for char in addr:
+    for char in addr:#地址是16进制表示:0-9 , a-f
         if (char < '0' or char > '9') and (char < 'A' or char > 'F') and (char < 'a' or char > 'f'):
             return False
     return True
@@ -533,12 +557,13 @@ def is_hash160(addr):
 
 ########### end pywallet functions #######################
 
-def is_minikey(text):
+def is_minikey(text):####11111
+    #判断一个密钥是不是minikey:minikey的定义在下面的注释中
     # Minikeys are typically 22 or 30 characters, but this routine
     # permits any length of 20 or more provided the minikey is valid.
     # A valid minikey must begin with an 'S', be in base58, and when
     # suffixed with '?' have its SHA256 hash begin with a zero byte.
-    # They are widely used in Casascius physical bitoins.
+    # They are widely used in Casascius physical bitoins(比特币硬币).
     return (len(text) >= 20 and text[0] == 'S'
             and all(ord(c) in __b58chars for c in text)
             and sha256(text + '?')[0] == 0x00)
@@ -554,6 +579,7 @@ BIP32_PRIME = 0x80000000
 
 
 def protect_against_invalid_ecpoint(func):
+    #防止无效的加密点
     def func_wrapper(*args):
         n = args[-1]
         while True:
@@ -577,6 +603,11 @@ def protect_against_invalid_ecpoint(func):
 #  public key can be determined without the master private key.
 @protect_against_invalid_ecpoint
 def CKD_priv(k, c, n):
+    # Child private key
+    #bip32 可以用来确认
+    # k = master private key (32 bytes)
+    # c = master chain code (extra entropy for key derivation) (32 bytes)
+    # n = the index of the key we want to derive. (only 32 bits will be used)
     if n < 0: raise ValueError('the bip32 index needs to be non-negative')
     is_prime = n & BIP32_PRIME
     return _CKD_priv(k, c, bfh(rev_hex(int_to_hex(n,4))), is_prime)
@@ -584,7 +615,7 @@ def CKD_priv(k, c, n):
 
 def _CKD_priv(k, c, s, is_prime):
     try:
-        keypair = ecc.ECPrivkey(k)
+        keypair = ecc.ECPrivkey(k)   # Qtum只支持曲线加密
     except ecc.InvalidECPointException as e:
         raise QtumException('Impossible xprv (not within curve order)') from e
     cK = keypair.get_public_key_bytes(compressed=True)
@@ -606,10 +637,12 @@ def _CKD_priv(k, c, s, is_prime):
 #  not hardened. If n is hardened, we need the master private key to find it.
 @protect_against_invalid_ecpoint
 def CKD_pub(cK, c, n):
+
     if n < 0: raise ValueError('the bip32 index needs to be non-negative')
-    if n & BIP32_PRIME:
+    if n & BIP32_PRIME:   #BIP32_PRIME  = '0b10000000000000000000000000000000'
         raise Exception('CKD_pub error')
     return _CKD_pub(cK, c, bfh(rev_hex(int_to_hex(n,4))))
+
 
 # helper function, callable with arbitrary string
 # note: 's' does not need to fit into 32 bits here! (c.f. trustedcoin billing)

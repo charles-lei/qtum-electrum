@@ -110,6 +110,7 @@ def pw_encode(s, password):
 
 def pw_decode(s, password):
     if password is not None:
+        #对密码进行哈希
         secret = Hash(password)
         try:
             d = to_string(DecodeAES(secret, s), "utf8")
