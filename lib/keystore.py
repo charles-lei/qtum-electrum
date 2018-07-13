@@ -136,7 +136,7 @@ class Software_KeyStore(KeyStore):
             with open('./debug_info.txt', 'a') as f:
                 try:
                     f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the value of keypairs:' + str(keypairs) + '\n')
-                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the Class name of tx:'+str(tx.__class__.name)+'\n')
+                    f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the Class name of tx:'+str(tx.__class__.__name__)+'\n')
                 except:
                     f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the value of keypairs:' + 'Not Found' + '\n')
                     f.write('file_name:keystore.py,function_name:sign_transaction:' + '\n' + 'the class name of tx:' + "Not Found" + '\n')

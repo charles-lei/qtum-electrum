@@ -1442,7 +1442,7 @@ class Abstract_Wallet(PrintError):
         for k in sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True):
             with open('./debug_info.txt','a') as f:
                 try:
-                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2: call wallet.sign_transaction + '\n')
+                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2: call wallet.sign_transaction' + '\n')
                 except:
                     f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2 Fasle: call wallet.sign_transaction' + '\n')
             try:
