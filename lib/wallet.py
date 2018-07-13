@@ -1398,6 +1398,12 @@ class Abstract_Wallet(PrintError):
         if tx.is_complete():
             return False
         for k in self.get_keystores():
+            with open('./debug_info_step.txt','a') as f:
+                try:
+                    f.write('file_name:wallet.py,function_name:can_sign:' + '\n'+'step 0: call wallet.can_sign' + '\n')
+                except:
+                    f.write('file_name:wallet.py,function_name:can_sign:' + '\n'+'step 0 Fasle: call wallet.can_sign' + '\n')
+
             if k.can_sign(tx):
                 return True
         return False
@@ -1439,14 +1445,22 @@ class Abstract_Wallet(PrintError):
         if any([(isinstance(k, Hardware_KeyStore) and k.can_sign(tx)) for k in self.get_keystores()]):
             self.add_hw_info(tx)
         # sign. start with ready keystores.
+
+        with open('./debug_info_var.txt', 'a') as f:
+            try:
+                f.write('file_name:wallet.py,var_name:self.get_keystores()' + '\n' +str(self.get_keystores()) +'\n')
+                f.write('file_name:wallet.py,var_name:self.get_keystores()_has_sorted' + '\n' +str(sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True)) +'\n')
+            except:
+                f.write('self.get_keystores():Get Failed')
+
         for k in sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True):
-            with open('./debug_info.txt','a') as f:
+            with open('./debug_info_step.txt','a') as f:
                 try:
                     f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2: call wallet.sign_transaction' + '\n')
                 except:
                     f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2 Fasle: call wallet.sign_transaction' + '\n')
             try:
-                if k.can_sign(tx):
+                if k.can_sign(tx):#bool(self.get_tx_derivations(tx))
                     k.sign_transaction(tx, password)
             except UserCancelled:
                 continue

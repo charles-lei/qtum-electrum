@@ -1148,15 +1148,15 @@ class Transaction:
         for i, txin in enumerate(self.inputs()):#txin:?transactioninput
             pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)#从txin中得到
 
-            with open('./debug_info.txt','a') as f:
+            with open('./debug_info_var.txt','a') as f:
                 try:
-                    f.write('txin:' + str(txin) + '\n')
-                    f.write('pubkeys:'+str(pubkeys)+'\n')
-                    f.write('x_pubkeys:' + str(x_pubkeys) + '\n')
+                    f.write('txin:' + str(txin) + 2*'\n')
+                    f.write('pubkeys:'+str(pubkeys)+ 2*'\n')
+                    f.write('x_pubkeys:' + str(x_pubkeys) + 2*'\n')
                 except:
-                    f.write('txin:' + str(txin) + '\n')
-                    f.write('tx_external_keypairs: can not get' + 'self.tx_external_keypairs' + '\n')
-                    f.write('Transaction.sign_info:not found' + 'Transaction.__class__.__name__' + '\n')
+                    f.write('txin:' + str(txin) + 2*'\n')
+                    f.write('tx_external_keypairs: can not get' + 'self.tx_external_keypairs' + 2*'\n')
+                    f.write('Transaction.sign_info:not found' + 'Transaction.__class__.__name__' + 2*'\n')
             #公钥和压缩公钥
             for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):#同时得到公钥#
                 # 和压缩公钥

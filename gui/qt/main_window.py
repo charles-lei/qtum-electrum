@@ -1473,10 +1473,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.on_error(exc_info)
             callback(False)
 
-        if self.tx_external_keypairs:
+        if self.tx_external_keypairs:#don't know
             """-----debug information-----"""
 
-            with open('./debug_info.txt','a') as f:
+            with open('./debug_info_var.txt','a') as f:
                 try:
                     f.write('tx_external_keypairs:'+str(self.tx_external_keypairs)+'\n')
                     f.write('Transaction.sign_info:' + str(Transaction.__class__.__name__) + '\n')
@@ -1489,9 +1489,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # call hook to see if plugin needs gui interaction
             """-----debug information-----"""
 
-            with open('./debug_info.txt', 'a') as f:
+            with open('./debug_info_step.txt', 'a') as f:
                 try:
-                    f.write('file_name:qt/main_window.py,function_name:sign_tx_with_password:' + '\n' + 'step1:wallet_info:' + str(self.wallet.__class__.__name__) + '\n')
+                    f.write('file_name:qt/main_window.py,function_name:sign_tx_with_password:' + '\n' + 'step 1:wallet_info:' + str(self.wallet.__class__.__name__) + '\n')
                 except:
                     f.write('file_name:qt/main_window.py,function_name:sign_tx_with_password:' + 'step1 False:wallet_info:can not get ' + 'self.wallet.__class__.__name__'+ '\n')
 
