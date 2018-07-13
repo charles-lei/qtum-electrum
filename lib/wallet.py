@@ -1444,7 +1444,7 @@ class Abstract_Wallet(PrintError):
                 try:
                     f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2: call wallet.sign_transaction + '\n')
                 except:
-                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2 Fasle: call wallet.sign_transaction + '\n')
+                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2 Fasle: call wallet.sign_transaction' + '\n')
             try:
                 if k.can_sign(tx):
                     k.sign_transaction(tx, password)
