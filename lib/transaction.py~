@@ -1318,7 +1318,7 @@ class Transaction:
             elif type == TYPE_PUBKEY:
                 addr = bitcoin.public_key_to_p2pkh(bfh(x))
             else:
-                addr = 'SCRIPT ' + x  #addr =  x #wang1
+                addr =  x #addr = 'SCRIPT ' + x  wang1
             o.append((addr,v))      # consider using yield (addr, v)
         return o
 
