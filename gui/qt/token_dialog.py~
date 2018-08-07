@@ -30,8 +30,8 @@ class TokenAddLayout(QGridLayout):
 
         if isinstance(self.dialog.parent().wallet.keystore, TrezorKeyStore):
             self.dialog.show_message('Trezor does not support QRC20 Token for now')
-            self.dialog.reject()
-            return
+            #self.dialog.reject()   #xiugai wang1
+            #return
 
         self.addresses = self.dialog.parent().wallet.get_addresses_sort_by_balance()
 
@@ -92,10 +92,12 @@ class TokenAddDialog(QDialog, MessageBoxMixin):
             name = r.get('name')
             decimals = r.get('decimals')
             symbol = r.get('symbol')
-            if not name or not symbol or not decimals or not isinstance(decimals, int):
+            if not name or not symbol or not (decimals is None) or not isinstance(decimals, int): #or not (decimals is null)
                 self.show_message('token info not valid: {} {} {}'.format(name, symbol, decimals))
                 return
+            #self.show_message('name1 ')
             token = Token(contract_addr, bind_addr, name, symbol, decimals, 0)
+            #self.show_message('name2 ')
             self.parent().set_token(token)
         except BaseException as e:
             self.show_message(str(e))

@@ -1474,6 +1474,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     @protected
     def sign_tx(self, tx, callback, password):
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-3 signatures:_sign_tx:main_window.py'+'\n')
+                except:
+                    f.write('-3 signatures:_sign_tx:main_window.py can not get' +'\n')
         self.sign_tx_with_password(tx, callback, password)
 
     def sign_tx_with_password(self, tx, callback, password):

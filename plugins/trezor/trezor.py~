@@ -13,6 +13,7 @@ from qtum_electrum.keystore import Hardware_KeyStore, is_xpubkey, parse_xpubkey,
 from qtum_electrum.base_wizard import ScriptTypeNotSupported
 from ..hw_wallet import HW_PluginBase
 from ..hw_wallet.plugin import is_any_tx_output_on_change_branch
+#from ..hw_wallet.plugin import is_any_tx_output_on_change_branch,trezor_validate_op_return_output_and_get_data
 
 # TREZOR initialization methods
 TIM_NEW, TIM_RECOVER, TIM_MNEMONIC, TIM_PRIVKEY = range(0, 4)
@@ -58,6 +59,12 @@ class TrezorKeyStore(Hardware_KeyStore):
         prev_tx = {}
         # path of the xpubs that are involved
         xpub_path = {}
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-7 tx:sign_transaction:trezor.py'+ str(tx) +'\n')
+                except:
+                    f.write('-7 tx:sign_transaction:trezor.py can not get'+ 'tx' +'\n')
+
         for txin in tx.inputs():
             pubkeys, x_pubkeys = tx.get_sorted_pubkeys(txin)
             tx_hash = txin['prevout_hash']
@@ -313,9 +320,34 @@ class TrezorPlugin(HW_PluginBase):
         self.prev_tx = prev_tx
         self.xpub_path = xpub_path
         client = self.get_client(keystore)
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-6 keystore:sign_transaction2:trezor.py'+ str(keystore) +'\n')
+                    f.write('-6 client.__class__.__name__:sign_transaction2:trezor.py'+ str(client.__class__.__name__) +'\n')
+                except:
+                    f.write('-6 keystore:sign_transaction2:trezor.py can not get'+ 'keystore' +'\n')
+                    f.write('-6 client.__class__.__name__:sign_transaction2:trezor.py'+ 'client.__class__.__name__' +'\n')
+
         inputs = self.tx_inputs(tx, True, keystore.get_script_gen())
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-5.7 inputs:sign_transaction2:trezor.py'+ str(inputs) +'\n')
+                except:
+                    f.write('-5.7 inputs:sign_transaction2:trezor.py can not get'+ 'inputs' +'\n')
         outputs = self.tx_outputs(keystore.get_derivation(), tx, keystore.get_script_gen())
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-5.3 outputs:sign_transaction2:trezor.py'+ str(outputs) +'\n')
+                except:
+                    f.write('-5.3 outputs:sign_transaction2:trezor.py can not get'+ 'outputs' +'\n')
+
         signatures = client.sign_tx(self.get_coin_name(), inputs, outputs, lock_time=tx.locktime)[0]
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-5 signatures:sign_transaction2:trezor.py'+ str(signatures) +'\n')
+                except:
+                    f.write('-5 signatures:sign_transaction2:trezor.py can not get'+ 'signatures' +'\n')
+
         signatures = [(bh2u(x) + '01') for x in signatures]
         tx.update_signatures(signatures)
 
@@ -460,7 +492,9 @@ class TrezorPlugin(HW_PluginBase):
             txoutputtype.amount = amount
             if _type == TYPE_SCRIPT:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
-                txoutputtype.op_return_data = address[2:]
+                #txoutputtype.op_return_data = address[2:]
+                #txoutputtype.op_return_data = trezor_validate_op_return_output_and_get_data(_type,address,amount)
+                txoutputtype.op_return_data = bfh(address[:])
             elif _type == TYPE_ADDRESS:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
                 #txoutputtype.address = qtum_addr_to_bitcoin_addr(address)

@@ -1450,6 +1450,12 @@ class Abstract_Wallet(PrintError):
         # add output info for hw wallets
         info = {}
         xpubs = self.get_master_public_keys()
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-9 xpubs:add_hw_info:wallet.py'+ str(xpubs) +'\n')
+                except:
+                    f.write('-9 xpubs:add_hw_info:wallet.py can not get'+ 'xpubs' +'\n')
+
         for txout in tx.outputs():
             _type, addr, amount = txout
             if self.is_mine(addr):
@@ -1458,6 +1464,11 @@ class Abstract_Wallet(PrintError):
                 # sort xpubs using the order of pubkeys
                 sorted_pubkeys, sorted_xpubs = zip(*sorted(zip(pubkeys, xpubs)))
                 info[addr] = index, sorted_xpubs, self.m if isinstance(self, Multisig_Wallet) else None
+        with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-8 info:add_hw_info:wallet.py'+ str(info) +'\n')
+                except:
+                    f.write('-8 info:add_hw_info:wallet.py can not get'+ 'info' +'\n')
         tx.output_info = info
 
     def sign_transaction(self, tx, password):
@@ -1465,6 +1476,12 @@ class Abstract_Wallet(PrintError):
             return
         # hardware wallets require extra info
         if any([(isinstance(k, Hardware_KeyStore) and k.can_sign(tx)) for k in self.get_keystores()]):
+            with open('./debug_info_HD.txt', 'a') as f:
+                try:
+                    f.write('-10 begin HD Wallet'+ '\n')
+                except:
+                    f.write('-10 begin error'+ '\n')
+
             self.add_hw_info(tx)
         # sign. start with ready keystores.
         for k in sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True):
