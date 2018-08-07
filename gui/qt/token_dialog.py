@@ -28,10 +28,10 @@ class TokenAddLayout(QGridLayout):
         self.callback = callback
         self.dialog = dialog
 
-        if isinstance(self.dialog.parent().wallet.keystore, TrezorKeyStore):
-            self.dialog.show_message('Trezor does not support QRC20 Token for now')
-            self.dialog.reject()
-            return
+        #if isinstance(self.dialog.parent().wallet.keystore, TrezorKeyStore):
+        #    self.dialog.show_message('Trezor does not support QRC20 Token for now')
+        #    self.dialog.reject()
+        #    return
 
         self.addresses = self.dialog.parent().wallet.get_addresses_sort_by_balance()
 
