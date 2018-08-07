@@ -30,8 +30,8 @@ class TokenAddLayout(QGridLayout):
 
         if isinstance(self.dialog.parent().wallet.keystore, TrezorKeyStore):
             self.dialog.show_message('Trezor does not support QRC20 Token for now')
-            #self.dialog.reject()
-            #return
+            self.dialog.reject()
+            return
 
         self.addresses = self.dialog.parent().wallet.get_addresses_sort_by_balance()
 
@@ -88,7 +88,7 @@ class TokenAddDialog(QDialog, MessageBoxMixin):
 
     def save(self, contract_addr, bind_addr):
         try:
-            r = self.parent().network.synchronous_get(('blockchain.token.get_info', [contract_addr]), timeout=10)
+            r = self.parent().network.get_token_info(contract_addr)
             name = r.get('name')
             decimals = r.get('decimals')
             symbol = r.get('symbol')
@@ -272,7 +272,7 @@ class TokenSendLayout(QGridLayout):
         self.callback(hash160, amount, gas_limit, gas_price)
 
 
-class TokenSendDialog(QDialog, MessageBoxMixin):
+class TokenSendDialog(QDialog, MessageBoxMixin):#
 
     def __init__(self, parent, token):
         """
@@ -287,7 +287,6 @@ class TokenSendDialog(QDialog, MessageBoxMixin):
             return
         self.setWindowTitle(_('Send') + " " + token.name)
         layout = TokenSendLayout(self, token, self.do_send)
-
         self.setLayout(layout)
 
     def do_send(self, pay_to, amount, gas_limit, gas_price):

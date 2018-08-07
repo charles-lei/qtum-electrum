@@ -1,0 +1,10 @@
+import sys
+
+def debug_info_func(text):
+    with open('debug_info_text.txt','a') as f:
+        f.write(text)
+        f.write('\n')
+    #f.close()
+
+debug_info('text:try write some info')
+debug_info('this is 2  ')

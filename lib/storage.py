@@ -223,17 +223,17 @@ class WalletStorage(PrintError):
 
     def put(self, key, value):
         try:
-            json.dumps(key, cls=util.MyEncoder)
+            json.dumps(key, cls=util.MyEncoder)#key是MyEncoder的实例就序列化
             json.dumps(value, cls=util.MyEncoder)
         except:
             self.print_error("json error: cannot save", key)
             return
         with self.lock:
-            if value is not None:
-                if self.data.get(key) != value:
+            if value is not None:#值不为空
+                if self.data.get(key) != value:#value 与 key 对应的value不一致
                     self.modified = True
                     self.data[key] = copy.deepcopy(value)
-            elif key in self.data:
+            elif key in self.data:#?为什么要弹出key
                 self.modified = True
                 self.data.pop(key)
 

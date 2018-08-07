@@ -40,7 +40,7 @@ from operator import itemgetter
 from functools import reduce
 
 from .i18n import _
-from .util import NotEnoughFunds, PrintError, UserCancelled, profiler, format_satoshis, InvalidPassword, WalletFileException
+from .util import NotEnoughFunds, PrintError, UserCancelled, profiler, format_satoshis, InvalidPassword, WalletFileException, TimeoutException
 from .qtum import *
 from .version import *
 from .keystore import load_keystore, Hardware_KeyStore
@@ -94,7 +94,7 @@ def append_utxos_to_inputs(inputs, network, pubkey, txin_type, imax):
         script = bitcoin.public_key_to_p2pk_script(pubkey)
         sh = bitcoin.script_to_scripthash(script)
         address = '(pubkey)'
-    u = network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
+    u = network.listunspent_for_scripthash(sh)
     for item in u:
         if len(inputs) >= imax:
             break
@@ -1141,17 +1141,17 @@ class Abstract_Wallet(PrintError):
     def make_unsigned_transaction(self, inputs, outputs, config,
                                   fixed_fee=None, change_addr=None,
                                   gas_fee=0, sender=None, is_sweep=False):
-        # check outputs 
+        # check outputs
         i_max = None
         for i, o in enumerate(outputs):
             _type, data, value = o
-            if _type == TYPE_ADDRESS:
+            if _type == TYPE_ADDRESS:#_键入的是地址
                 if not is_address(data):
                     raise Exception("Invalid Qtum address:" + data)
             if value == '!':
                 if i_max is not None:
                     raise Exception("More than one output set to spend max")
-                i_max = i
+                i_max = i #outputs中花费最大的输出
         # Avoid index-out-of-range with inputs[0] below
         if not inputs:
             raise NotEnoughFunds()
@@ -1162,7 +1162,7 @@ class Abstract_Wallet(PrintError):
         for item in inputs:
             self.add_input_info(item)
 
-        # change address
+        # change address:找零地址
         if change_addr:
             change_addrs = [change_addr]
         else:
@@ -1185,21 +1185,22 @@ class Abstract_Wallet(PrintError):
             fee_estimator = lambda size: fixed_fee
 
         if i_max is None:
+            print('debug::i_max is what? print i_max value:',i_max)
             # Let the coin chooser select the coins to spend
             max_change = self.max_change_outputs if self.multiple_change else 1
-            if sender:
+            if sender:#sender == None 直接选Qtum
                 coin_chooser = coinchooser.CoinChooserQtum()
             else:
                 coin_chooser = coinchooser.get_coin_chooser(config)
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], 
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],
                                       fee_estimator, self.dust_threshold(), sender)
-        else:
-            sendable = sum(map(lambda x:x['value'], inputs))
+        else:#i_max 不为 None 时候:
+            sendable = sum(map(lambda x:x['value'], inputs)) #所有输入的地址的UTXO求和
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
-            tx = Transaction.from_io(inputs, outputs[:])
-            fee = fee_estimator(tx.estimated_size())
-            fee = fee + gas_fee
+            tx = Transaction.from_io(inputs, outputs[:])#?
+            fee = fee_estimator(tx.estimated_size())   #根据交易字节预估费用
+            fee = fee + gas_fee      #交易费用加gas费用
             amount = sendable - tx.output_value() - fee
             if amount < 0:
                 raise NotEnoughFunds()
@@ -1207,12 +1208,13 @@ class Abstract_Wallet(PrintError):
             tx = Transaction.from_io(inputs, outputs[:])
 
         # Sort the inputs and outputs deterministically
+        #确切的排列input和output
         # tx.BIP_LI01_sort()
         tx.qtum_sort(sender)
         # Timelock tx to current height.
         # Disabled until keepkey firmware update
         # tx.locktime = self.get_local_height()
-        run_hook('make_unsigned_transaction', self, tx)
+        run_hook('make_unsigned_transaction', self, tx)#?
         return tx
 
     def mktx(self, outputs, password, config, fee=None, change_addr=None, domain=None):
@@ -1396,6 +1398,12 @@ class Abstract_Wallet(PrintError):
         if tx.is_complete():
             return False
         for k in self.get_keystores():
+            with open('./debug_info_step.txt','a') as f:
+                try:
+                    f.write('file_name:wallet.py,function_name:can_sign:' + '\n'+'step 0: call wallet.can_sign' + '\n')
+                except:
+                    f.write('file_name:wallet.py,function_name:can_sign:' + '\n'+'step 0 Fasle: call wallet.can_sign' + '\n')
+
             if k.can_sign(tx):
                 return True
         return False
@@ -1406,8 +1414,10 @@ class Abstract_Wallet(PrintError):
         # all the input txs, in which case we ask the network.
         tx = self.transactions.get(tx_hash)
         if not tx and self.network:
-            request = ('blockchain.transaction.get', [tx_hash])
-            tx = Transaction(self.network.synchronous_get(request))
+            try:
+                tx = Transaction(self.network.get_transaction(tx_hash))
+            except TimeoutException as e:
+                self.print_error('getting input txn from network timed out for {}'.format(tx_hash))
         return tx
 
     def add_hw_info(self, tx):
@@ -1435,9 +1445,22 @@ class Abstract_Wallet(PrintError):
         if any([(isinstance(k, Hardware_KeyStore) and k.can_sign(tx)) for k in self.get_keystores()]):
             self.add_hw_info(tx)
         # sign. start with ready keystores.
-        for k in sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True):
+
+        with open('./debug_info_var.txt', 'a') as f:
             try:
-                if k.can_sign(tx):
+                f.write('file_name:wallet.py,var_name:self.get_keystores()' + '\n' +str(self.get_keystores()) +'\n')
+                f.write('file_name:wallet.py,var_name:self.get_keystores()_has_sorted' + '\n' +str(sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True)) +'\n')
+            except:
+                f.write('self.get_keystores():Get Failed')
+
+        for k in sorted(self.get_keystores(), key=lambda ks: ks.ready_to_sign(), reverse=True):
+            with open('./debug_info_step.txt','a') as f:
+                try:
+                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2: call wallet.sign_transaction' + '\n')
+                except:
+                    f.write('file_name:wallet.py,function_name:sign_transaction:' + '\n'+'step 2 Fasle: call wallet.sign_transaction' + '\n')
+            try:
+                if k.can_sign(tx):#bool(self.get_tx_derivations(tx))
                     k.sign_transaction(tx, password)
             except UserCancelled:
                 continue
@@ -1858,7 +1881,7 @@ class Simple_Wallet(Abstract_Wallet):
         self.storage.put('keystore', self.keystore.dump())
 
 
-class Imported_Wallet(Simple_Wallet):
+class Imported_Wallet(Simple_Wallet):#2018.07.08
     # wallet made of imported addresses
 
     wallet_type = 'imported'
@@ -1870,10 +1893,10 @@ class Imported_Wallet(Simple_Wallet):
     def is_watching_only(self):
         return self.keystore is None
 
-    def get_keystores(self):
+    def get_keystores(self):#keystore有元素返回,无元素返回[]
         return [self.keystore] if self.keystore else []
 
-    def can_import_privkey(self):
+    def can_import_privkey(self):#keystore有元素:True
         return bool(self.keystore)
 
     def load_keystore(self):
@@ -1936,8 +1959,8 @@ class Imported_Wallet(Simple_Wallet):
         self.add_address(address)
         return address
 
-    def delete_address(self, address):
-        if address not in self.addresses:
+    def delete_address(self, address):#删除地址
+        if address not in self.addresses:#要删除的地址不在地址库中,返回Null
             return
 
         transactions_to_remove = set()  # only referred to by this address
@@ -1950,7 +1973,7 @@ class Imported_Wallet(Simple_Wallet):
                 else:
                     for tx_hash, height in details:
                         transactions_new.add(tx_hash)
-            transactions_to_remove -= transactions_new
+            transactions_to_remove -= transactions_new #?
             self.history.pop(address, None)
 
             for tx_hash in transactions_to_remove:
@@ -1960,18 +1983,18 @@ class Imported_Wallet(Simple_Wallet):
                 self.unverified_tx.pop(tx_hash, None)
                 self.transactions.pop(tx_hash, None)
 
-            self.storage.put('verified_tx3', self.verified_tx)
+            self.storage.put('verified_tx3', self.verified_tx)#?
         self.save_transactions()
 
         self.set_label(address, None)
         self.remove_payment_request(address, {})
         self.set_frozen_state([address], False)
 
-        pubkey = self.get_public_key(address)
+        pubkey = self.get_public_key(address)#得到地址的公钥
         self.addresses.pop(address)
         if pubkey:
             # delete key iff no other address uses it (e.g. p2pkh and p2wpkh for same key)
-            for txin_type in bitcoin.SCRIPT_TYPES.keys():
+            for txin_type in bitcoin.WIF_SCRIPT_TYPES.keys():
                 try:
                     addr2 = bitcoin.pubkey_to_address(txin_type, pubkey)
                 except NotImplementedError:
@@ -1983,7 +2006,7 @@ class Imported_Wallet(Simple_Wallet):
                 self.keystore.delete_imported_key(pubkey)
                 self.save_keystore()
         self.storage.put('addresses', self.addresses)
-        self.storage.write()
+        self.storage.write()#?
 
     def get_address_index(self, address):
         return self.get_public_key(address)
@@ -1992,6 +2015,7 @@ class Imported_Wallet(Simple_Wallet):
         return self.addresses[address].get('pubkey')
 
     def import_private_key(self, sec, pw, redeem_script=None):
+        #导入私钥
         try:
             txin_type, pubkey = self.keystore.import_privkey(sec, pw)
         except Exception:
@@ -2023,7 +2047,8 @@ class Imported_Wallet(Simple_Wallet):
         return self.addresses[address].get('type', 'address')
 
     def add_input_sig_info(self, txin, address):
-        if self.is_watching_only():
+        #输入签名信息
+        if self.is_watching_only():#地址算公钥
             addrtype, hash160 = b58_address_to_hash160(address)
             x_pubkey = 'fd' + bh2u(bytes([addrtype]) + hash160)
             txin['x_pubkeys'] = [x_pubkey]

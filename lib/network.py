@@ -33,11 +33,13 @@ import time
 from collections import defaultdict
 import re
 import socks
+import ipaddress
 import dns
 import dns.resolver
 from . import bitcoin
 from . import blockchain
 from . import util
+from .util import print_error
 from .qtum import *
 from . import constants
 from .interface import Connection, Interface
@@ -451,22 +453,40 @@ class Network(util.DaemonThread):
         else:
             socket.socket = socket._socketobject
             if sys.platform == 'win32':
-                # on Windows, socket.getaddrinfo takes a mutex, and might hold it for up to 10 seconds
-                # when dns-resolving. to speed it up drastically, we resolve dns ourselves, outside that lock
-                def fast_getaddrinfo(host, *args, **kwargs):
-                    try:
-                        if str(host) not in ('localhost', 'localhost.',):
-                            answers = dns.resolver.query(host)
-                            addr = str(answers[0])
-                        else:
-                            addr = host
-                    except:
-                        raise socket.gaierror(11001, 'getaddrinfo failed')
-                    else:
-                        return socket._getaddrinfo(addr, *args, **kwargs)
-                socket.getaddrinfo = fast_getaddrinfo
+                # On Windows, socket.getaddrinfo takes a mutex, and might hold it for up to 10 seconds
+                # when dns-resolving. To speed it up drastically, we resolve dns ourselves, outside that lock.
+                # see #4421
+                socket.getaddrinfo = self._fast_getaddrinfo
             else:
                 socket.getaddrinfo = socket._getaddrinfo
+
+    @staticmethod
+    def _fast_getaddrinfo(host, *args, **kwargs):
+        def needs_dns_resolving(host2):
+            try:
+                ipaddress.ip_address(host2)
+                return False  # already valid IP
+            except ValueError:
+                pass  # not an IP
+            if str(host) in ('localhost', 'localhost.',):
+                return False
+            return True
+        try:
+            if needs_dns_resolving(host):
+                answers = dns.resolver.query(host)
+                addr = str(answers[0])
+            else:
+                addr = host
+        except dns.exception.DNSException:
+            # dns failed for some reason, e.g. dns.resolver.NXDOMAIN
+            # this is normal. Simply report back failure:
+            raise socket.gaierror(11001, 'getaddrinfo failed')
+        except BaseException as e:
+            # Possibly internal error in dnspython :( see #4483
+            # Fall back to original socket.getaddrinfo to resolve dns.
+            print_error('dnspython failed to resolve dns with error:', e)
+            addr = host
+        return socket._getaddrinfo(addr, *args, **kwargs)
 
     @with_interface_lock
     def start_network(self, protocol, proxy):
@@ -593,6 +613,10 @@ class Network(util.DaemonThread):
         elif method == 'blockchain.headers.subscribe':
             if error is None:
                 self.on_notify_header(interface, result)
+            else:
+                # no point in keeping this connection without headers sub
+                self.connection_down(interface.server)
+                return
         elif method == 'server.peers.subscribe':
             if error is None:
                 self.irc_servers = parse_servers(result)
@@ -687,51 +711,6 @@ class Network(util.DaemonThread):
                     self.sub_cache[k] = response
             # Response is now in canonical form
             self.process_response(interface, response, callbacks)
-
-    def map_scripthash_to_address(self, callback):
-        def cb2(x):
-            x2 = x.copy()
-            p = x2.pop('params')
-            addr = self.h2addr[p[0]]
-            x2['params'] = [addr]
-            callback(x2)
-        return cb2
-
-    def subscribe_to_addresses(self, addresses, callback):
-        hash2address = {bitcoin.address_to_scripthash(address): address for address in addresses}
-        self.h2addr.update(hash2address)
-        msgs = [('blockchain.scripthash.subscribe', [x]) for x in hash2address.keys()]
-        self.send(msgs, self.map_scripthash_to_address(callback))
-
-    def request_address_history(self, address, callback):
-        h = bitcoin.address_to_scripthash(address)
-        self.h2addr.update({h: address})
-        self.send([('blockchain.scripthash.get_history', [h])], self.map_scripthash_to_address(callback))
-
-    def subscribe_tokens(self, tokens, callback):
-        msgs = [(
-            'blockchain.contract.event.subscribe',
-            [bh2u(b58_address_to_hash160(token.bind_addr)[1]), token.contract_addr, TOKEN_TRANSFER_TOPIC])
-            for token in tokens]
-        self.send(msgs, callback)
-
-    def request_token_balance(self, token, callback):
-        """
-        :type token: Token
-        :param callback:
-        :return:
-        """
-        __, hash160 = b58_address_to_hash160(token.bind_addr)
-        hash160 = bh2u(hash160)
-        datahex = '70a08231{}'.format(hash160.zfill(64))
-        self.send([('blockchain.contract.call', [token.contract_addr, datahex, '', 'int'])],
-                  callback)
-
-    def request_token_history(self, token, callback):
-        __, hash160 = b58_address_to_hash160(token.bind_addr)
-        hash160 = bh2u(hash160)
-        self.send([('blockchain.contract.event.get_history',
-                    [hash160, token.contract_addr, TOKEN_TRANSFER_TOPIC])], callback)
 
     def send(self, messages, callback):
         '''Messages is a list of (method, params) tuples'''
@@ -899,13 +878,6 @@ class Network(util.DaemonThread):
             interface.print_error('catch up done', blockchain.height())
             blockchain.catch_up = None
         self.notify('updated')
-
-    def request_header(self, interface, height):
-        #interface.print_error("requesting header %d" % height)
-        height = max(height, 0)
-        self.queue_request('blockchain.block.get_header', [height], interface)
-        interface.request = height
-        interface.req_time = time.time()
 
     def on_get_header(self, interface, response):
         '''Handle receiving a single block header'''
@@ -1108,7 +1080,12 @@ class Network(util.DaemonThread):
         self.on_stop()
 
     def on_notify_header(self, interface, header_dict):
-        header_hex, height = header_dict['hex'], header_dict['height']
+        try:
+            header_hex, height = header_dict['hex'], header_dict['height']
+        except KeyError:
+            # no point in keeping this connection without headers sub
+            self.connection_down(interface.server)
+            return
         header = blockchain.deserialize_header(bfh(header_hex), height)
         height = header.get('block_height')
         if not height:
@@ -1194,23 +1171,171 @@ class Network(util.DaemonThread):
         self.blockchain().update_size()
         return self.blockchain().height()
 
-    def synchronous_get(self, request, timeout=30):
+    @staticmethod
+    def __wait_for(it):
+        """Wait for the result of calling lambda `it`."""
         q = queue.Queue()
-        self.send([request], q.put)
+        it(q.put)
         try:
-            r = q.get(True, timeout)
+            result = q.get(block=True, timeout=30)
         except queue.Empty:
-            raise Exception('Server did not answer')
-        if r.get('error'):
-            raise Exception(r.get('error'))
-        return r.get('result')
+            raise util.TimeoutException('Server did not answer')
 
-    def broadcast(self, tx, timeout=30):
-        tx_hash = tx.txid()
+        if result.get('error'):
+            raise Exception(result.get('error'))
+
+        return result.get('result')
+
+    @staticmethod
+    def __with_default_synchronous_callback(invocation, callback):
+        """ Use this method if you want to make the network request
+        synchronous. """
+        if not callback:
+            return Network.__wait_for(invocation)
+
+        invocation(callback)
+
+    def request_header(self, interface, height):
+        self.queue_request('blockchain.block.get_header', [height], interface)
+        interface.request = height
+        interface.req_time = time.time()
+
+    def map_scripthash_to_address(self, callback):
+        def cb2(x):
+            x2 = x.copy()
+            p = x2.pop('params')
+            addr = self.h2addr[p[0]]
+            x2['params'] = [addr]
+            callback(x2)
+        return cb2
+
+    def subscribe_to_addresses(self, addresses, callback):
+        hash2address = {
+            bitcoin.address_to_scripthash(address): address
+            for address in addresses}
+        self.h2addr.update(hash2address)
+        msgs = [
+            ('blockchain.scripthash.subscribe', [x])
+            for x in hash2address.keys()]
+        self.send(msgs, self.map_scripthash_to_address(callback))
+
+    def request_address_history(self, address, callback):
+        h = bitcoin.address_to_scripthash(address)
+        self.h2addr.update({h: address})
+        self.send([('blockchain.scripthash.get_history', [h])], self.map_scripthash_to_address(callback))
+
+    # NOTE this method handles exceptions and a special edge case, counter to
+    # what the other ElectrumX methods do. This is unexpected.
+    def broadcast_transaction(self, transaction, callback=None):
+        command = 'blockchain.transaction.broadcast'
+        invocation = lambda c: self.send([(command, [str(transaction)])], c)
+
+        if callback:
+            invocation(callback)
+            return
+
         try:
-            out = self.synchronous_get(('blockchain.transaction.broadcast', [str(tx)]), timeout)
+            out = Network.__wait_for(invocation)
         except BaseException as e:
             return False, "error: " + str(e)
-        if out != tx_hash:
+
+        if out != transaction.txid():
             return False, "error: " + out
+
         return True, out
+
+    def get_history_for_scripthash(self, hash, callback=None):
+        command = 'blockchain.scripthash.get_history'
+        invocation = lambda c: self.send([(command, [hash])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def subscribe_to_headers(self, callback=None):
+        command = 'blockchain.headers.subscribe'
+        invocation = lambda c: self.send([(command, [True])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def subscribe_to_address(self, address, callback=None):
+        command = 'blockchain.address.subscribe'
+        invocation = lambda c: self.send([(command, [address])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def get_merkle_for_transaction(self, tx_hash, tx_height, callback=None):
+        command = 'blockchain.transaction.get_merkle'
+        invocation = lambda c: self.send([(command, [tx_hash, tx_height])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def subscribe_to_scripthash(self, scripthash, callback=None):
+        command = 'blockchain.scripthash.subscribe'
+        invocation = lambda c: self.send([(command, [scripthash])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def get_transaction(self, transaction_hash, callback=None):
+        command = 'blockchain.transaction.get'
+        invocation = lambda c: self.send([(command, [transaction_hash])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def get_transactions(self, transaction_hashes, callback=None):
+        command = 'blockchain.transaction.get'
+        messages = [(command, [tx_hash]) for tx_hash in transaction_hashes]
+        invocation = lambda c: self.send(messages, c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def listunspent_for_scripthash(self, scripthash, callback=None):
+        command = 'blockchain.scripthash.listunspent'
+        invocation = lambda c: self.send([(command, [scripthash])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def get_balance_for_scripthash(self, scripthash, callback=None):
+        command = 'blockchain.scripthash.get_balance'
+        invocation = lambda c: self.send([(command, [scripthash])], c)
+
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def get_transactions_receipt(self, tx_hashs, callback):
+        command = 'blochchain.transaction.get_receipt'
+        messages = [(command, [tx_hash]) for tx_hash in tx_hashs]
+        invocation = lambda c: self.send(messages, c)
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def subscribe_tokens(self, tokens, callback):
+        msgs = [(
+            'blockchain.contract.event.subscribe',
+            [bh2u(b58_address_to_hash160(token.bind_addr)[1]), token.contract_addr, TOKEN_TRANSFER_TOPIC])
+            for token in tokens]
+        self.send(msgs, callback)
+
+    def get_token_info(self, contract_addr, callback=None):
+        command = 'blockchain.token.get_info'
+        invocation = lambda c: self.send([(command, [contract_addr, ])], c)
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def call_contract(self, address, data, sender, callback=None):
+        command = 'blockchain.contract.call'
+        invocation = lambda c: self.send([(command, [address, data, sender])], c)
+        return Network.__with_default_synchronous_callback(invocation, callback)
+
+    def request_token_balance(self, token, callback):
+        """
+        :type token: Token
+        :param callback:
+        :return:
+        """
+        __, hash160 = b58_address_to_hash160(token.bind_addr)
+        hash160 = bh2u(hash160)
+        datahex = '70a08231{}'.format(hash160.zfill(64))
+        self.send([('blockchain.contract.call', [token.contract_addr, datahex, '', 'int'])],
+                  callback)
+
+    def request_token_history(self, token, callback):
+        __, hash160 = b58_address_to_hash160(token.bind_addr)
+        hash160 = bh2u(hash160)
+        self.send([('blockchain.contract.event.get_history',
+                    [hash160, token.contract_addr, TOKEN_TRANSFER_TOPIC])], callback)

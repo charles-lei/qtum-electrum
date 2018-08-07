@@ -192,7 +192,7 @@ def hook(func):
 
 def run_hook(name, *args):
     results = []
-    f_list = hooks.get(name, [])
+    f_list = hooks.get(name, [])#hooks里面有关键词name,就返回name对应的value,否则,返回[]
     for p, f in f_list:
         if p.is_enabled():
             try:

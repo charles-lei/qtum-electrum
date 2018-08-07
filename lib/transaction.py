@@ -625,12 +625,12 @@ class Transaction:
             self.raw = self.serialize()
         return self.raw
 
-    def __init__(self, raw):
+    def __init__(self, raw):#初始化,对raw进行赋值
         if raw is None:
             self.raw = None
-        elif isinstance(raw, str):
+        elif isinstance(raw, str):#raw是字符串
             self.raw = raw.strip() if raw else None
-        elif isinstance(raw, dict):
+        elif isinstance(raw, dict):#raw是字典
             self.raw = raw['hex']
         else:
             raise Exception("cannot initialize transaction", raw)
@@ -663,11 +663,13 @@ class Transaction:
         # sort pubkeys and x_pubkeys, using the order of pubkeys
         if txin['type'] == 'coinbase':
             return [], []
-        x_pubkeys = txin['x_pubkeys']
-        pubkeys = txin.get('pubkeys')
-        if pubkeys is None:
-            pubkeys = [xpubkey_to_pubkey(x) for x in x_pubkeys]
-            pubkeys, x_pubkeys = zip(*sorted(zip(pubkeys, x_pubkeys)))
+        x_pubkeys = txin['x_pubkeys']#只有X坐标的公钥
+        pubkeys = txin.get('pubkeys')#完整的公钥
+        if pubkeys is None:#完整的公钥为空
+            pubkeys = [xpubkey_to_pubkey(x) for x in x_pubkeys]#由压缩公钥生成完整公钥
+            pubkeys, x_pubkeys = zip(*sorted(zip(pubkeys, x_pubkeys)))#zip() 函数用于将可迭代的对象作为参数，
+            # 将对象中对应的元素打包成一个个元组，然后返回由这些元组组成的列表。
+            # zip(*):对打包解压缩
             txin['pubkeys'] = pubkeys = list(pubkeys)
             txin['x_pubkeys'] = x_pubkeys = list(x_pubkeys)
         return pubkeys, x_pubkeys
@@ -913,7 +915,9 @@ class Transaction:
             raise TypeError('Unknown txin type', txin['type'])
 
     @classmethod
-    def serialize_outpoint(self, txin):
+    def serialize_outpoint(self, txin):#序列化
+        #COutPoint主要用在交易的输入CTxIn中，用来确定当前输出的来源，
+        #包括前一笔交易的hash，以及对应前一笔交易中的第几个输出的序列号(序列号4个字节)。
         return bh2u(bfh(txin['prevout_hash'])[::-1]) + int_to_hex(txin['prevout_n'], 4)
 
     @classmethod
@@ -968,11 +972,12 @@ class Transaction:
         return 9 + len(script) // 2
 
     def serialize_output(self, output):
+        #output里面包括了'交易数量,脚本长度,脚本地址,'
         # qtum
         output_type, data, amount = output
         if output_type == 'coinstake':
             output_type = TYPE_SCRIPT
-        s = int_to_hex(amount, 8)
+        s = int_to_hex(amount, 8) #
         script = self.pay_script(output_type, addr=data)
         s += var_int(len(script)//2)
         s += script
@@ -986,11 +991,11 @@ class Transaction:
         outputs = self.outputs()
         txin = inputs[i]
         # TODO: py3 hex
-        if self.is_segwit_input(txin):
-            hashPrevouts = bh2u(Hash(bfh(''.join(self.serialize_outpoint(txin) for txin in inputs))))
-            hashSequence = bh2u(Hash(bfh(''.join(int_to_hex(txin.get('sequence', 0xffffffff - 1), 4) for txin in inputs))))
-            hashOutputs = bh2u(Hash(bfh(''.join(self.serialize_output(o) for o in outputs))))
-            outpoint = self.serialize_outpoint(txin)
+        if self.is_segwit_input(txin):#txin是隔离见证
+            hashPrevouts = bh2u(Hash(bfh(''.join(self.serialize_outpoint(txin) for txin in inputs))))#得到所有输入的前一笔输出的hash值和对应的输出序号
+            hashSequence = bh2u(Hash(bfh(''.join(int_to_hex(txin.get('sequence', 0xffffffff - 1), 4) for txin in inputs))))#
+            hashOutputs = bh2u(Hash(bfh(''.join(self.serialize_output(o) for o in outputs))))#序列化所有输出地址
+            outpoint = self.serialize_outpoint(txin) #
             preimage_script = self.get_preimage_script(txin)
             scriptCode = var_int(len(preimage_script) // 2) + preimage_script
             amount = int_to_hex(txin['value'], 8)
@@ -1000,7 +1005,7 @@ class Transaction:
             txins = var_int(len(inputs)) + ''.join(self.serialize_input(txin, self.get_preimage_script(txin) if i==k else '') for k, txin in enumerate(inputs))
             txouts = var_int(len(outputs)) + ''.join(self.serialize_output(o) for o in outputs)
             preimage = nVersion + txins + txouts + nLocktime + nHashType
-        return preimage
+        return preimage #输入的last_tx的信息
 
     def is_segwit(self):
         if not self.is_partial_originally:
@@ -1079,7 +1084,7 @@ class Transaction:
         return self.virtual_size_from_weight(weight)
 
     @classmethod
-    def estimated_input_weight(cls, txin):
+    def estimated_input_weight(cls, txin):#估计输入重量
         '''Return an estimate of serialized input weight in weight units.'''
         script = cls.input_script(txin, True)
         input_size = len(cls.serialize_input(txin, script)) // 2
@@ -1139,28 +1144,44 @@ class Transaction:
 
     def sign(self, keypairs) -> None:
         # keypairs:  (x_)pubkey -> secret_bytes
-        for i, txin in enumerate(self.inputs()):
-            pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
-            for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
+        #使用公钥和私钥进行签名,公钥是X点坐标
+        for i, txin in enumerate(self.inputs()):#txin:?transactioninput
+            pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)#从txin中得到
+
+            with open('./debug_info_var.txt','a') as f:
+                try:
+                    f.write('txin:' + str(txin) + 2*'\n')
+                    f.write('pubkeys:'+str(pubkeys)+ 2*'\n')
+                    f.write('x_pubkeys:' + str(x_pubkeys) + 2*'\n')
+                except:
+                    f.write('txin:' + str(txin) + 2*'\n')
+                    f.write('tx_external_keypairs: can not get' + 'self.tx_external_keypairs' + 2*'\n')
+                    f.write('Transaction.sign_info:not found' + 'Transaction.__class__.__name__' + 2*'\n')
+            #公钥和压缩公钥
+            for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):#同时得到公钥#
+                # 和压缩公钥
                 if self.is_txin_complete(txin):
                     break
-                if pubkey in keypairs:
+                if pubkey in keypairs:  #keypairs里面是公钥还是压缩公钥不清楚,所以通过把输入的公钥同时计算出
+                       #公钥和压缩公钥,然后判断输入的公钥或者压缩公钥是否和keypairs里面匹配
                     _pubkey = pubkey
                 elif x_pubkey in keypairs:
                     _pubkey = x_pubkey
                 else:
                     continue
                 print_error("adding signature for", _pubkey)
-                sec, compressed = keypairs.get(_pubkey)
-                sig = self.sign_txin(i, sec)
+                sec, compressed = keypairs.get(_pubkey)   #从keypairs得到私钥和压缩公钥
+                sig = self.sign_txin(i, sec)  #对交易中的输入的第i个地址的私钥进行签名
                 self.add_signature_to_txin(i, j, sig)
         print_error("is_complete", self.is_complete())
         self.raw = self.serialize()
 
     def sign_txin(self, txin_index, privkey_bytes) -> str:
         pre_hash = Hash(bfh(self.serialize_preimage(txin_index)))
+        #获取txin_index[txin_index]的preimage的信息,对这些信息bfh = bytes.fromhex()后
+        # ,即将16进制字符串转为bytes(字节)形式进行hash
         privkey = ecc.ECPrivkey(privkey_bytes)
-        sig = privkey.sign_transaction(pre_hash)
+        sig = privkey.sign_transaction(pre_hash)#prehash完成私钥签名
         sig = bh2u(sig) + '01'
         return sig
 

@@ -464,8 +464,7 @@ class TrezorPlugin(HW_PluginBase):
                 txoutputtype.op_return_data = bfh(address[:])
             elif _type == TYPE_ADDRESS:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
-                #txoutputtype.address = qtum_addr_to_bitcoin_addr(address)
-                txoutputtype.address = address
+                txoutputtype.address = qtum_addr_to_bitcoin_addr(address)
             return txoutputtype
 
         outputs = []

@@ -30,7 +30,7 @@ import traceback
 from . import bitcoin
 from . import keystore
 from .i18n import _
-from .keystore import bip44_derivation
+from .keystore import bip44_derivation, purpose48_derivation
 from .wallet import Imported_Wallet, Standard_Wallet, Multisig_Wallet, Mobile_Wallet, wallet_types, Qt_Core_Wallet
 from .storage import STO_EV_USER_PW, STO_EV_XPUB_PW, get_derivation_used_for_hw_device_encryption
 from .util import UserCancelled, InvalidPassword
@@ -60,32 +60,34 @@ class BaseWizard(object):
         action = args[0]
         args = args[1:]
         self.stack.append((action, args))
-        if not action:
+        if not action: #没有动作时返回空
             return
         if type(action) is tuple:
-            self.plugin, action = action
-        if self.plugin and hasattr(self.plugin, action):
-            f = getattr(self.plugin, action)
+            self.plugin, action = action #self.plugin是一个对象
+        if self.plugin and hasattr(self.plugin, action): #如果对象中有action属性
+            f = getattr(self.plugin, action) #action属性赋值给f
             f(self, *args)
         elif hasattr(self, action):
-            f = getattr(self, action)
-            f(*args)
+            f = getattr(self, action)#fanhui gai duixiang shu xing zhi
+            f(*args)#????
         else:
             raise Exception("unknown action", action)
 
     def can_go_back(self):
-        return len(self.stack)>1
+        return len(self.stack)>1#如果stack长度大于1,返回True
 
     def go_back(self):
         if not self.can_go_back():
+        #stack>1 can_go_back() == True not True == False:
+        #stack <= 1,return
             return
-        self.stack.pop()
-        action, args = self.stack.pop()
-        self.run(action, *args)
+        self.stack.pop()#stack 弹出且没有接收者,
+        action, args = self.stack.pop() #stack 弹出 ,有接收者
+        self.run(action, *args)#run()中有压栈操作
 
     def new(self):
         name = os.path.basename(self.storage.path)
-        title = _("Create") + ' ' + name
+        title = _("Create") + ' ' + name   #和界面有关,用户选择创建钱包类型
         message = '\n'.join([
             _("What kind of wallet do you want to create?")
         ])
@@ -97,13 +99,13 @@ class BaseWizard(object):
             ('multisig',  _("Multi-signature wallet")),
             ('imported', _("Import Qtum addresses or private keys")),
         ]
-        choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]
+        choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]#?wallet_types
         self.choice_dialog(title=title, message=message, choices=choices, run_next=self.on_wallet_type)
 
-    def load_2fa(self):
+    def load_2fa(self):#?
         self.storage.put('wallet_type', '2fa')
         self.storage.put('use_trustedcoin', True)
-        self.plugin = self.plugins.load_plugin('trustedcoin')
+        self.plugin = self.plugins.load_plugin('trustedcoin')#?
 
     def on_wallet_type(self, choice):
         self.wallet_type = choice
@@ -114,16 +116,16 @@ class BaseWizard(object):
         elif choice == 'multisig':
             action = 'choose_multisig'
         elif choice == '2fa':
-            self.load_2fa()
+            self.load_2fa()#run()
             action = self.storage.get_action()
         elif choice == 'imported':
             action = 'import_addresses_or_keys'
-        self.run(action)
+        self.run(action)#?
 
-    def choose_multisig(self):
+    def choose_multisig(self):#多重签名
         def on_multisig(m, n):
             self.multisig_type = "%dof%d"%(m, n)
-            self.storage.put('wallet_type', self.multisig_type)
+            self.storage.put('wallet_type', self.multisig_type)#m-n多重签名
             self.n = n
             self.run('choose_keystore')
         self.multisig_dialog(run_next=on_multisig)
@@ -151,7 +153,7 @@ class BaseWizard(object):
                 ('restore_from_seed', _('I already have a seed')),
                 ('restore_from_key', _('Use public or private keys')),
             ]
-            if not self.is_kivy:
+            if not self.is_kivy:#?
                 choices.append(('choose_hw_device',  _('Use a hardware device')))
         else:
             message = _('Add a cosigner to your multi-sig wallet')
@@ -164,7 +166,8 @@ class BaseWizard(object):
 
         self.choice_dialog(title=title, message=message, choices=choices, run_next=self.run)
 
-    def import_addresses_or_keys(self):
+    def import_addresses_or_keys(self):#导入地址或者密钥
+        # ?判断keystore中的列表内是地址还是私钥
         v = lambda x: keystore.is_address_list(x) or keystore.is_private_key_list(x)
         title = _("Import Qtum Addresses")
         message = _(
@@ -180,7 +183,7 @@ class BaseWizard(object):
                 w.import_address(x)
         elif keystore.is_private_key_list(text):
             k = keystore.Imported_KeyStore({})
-            self.storage.put('keystore', k.dump())
+            self.storage.put('keystore', k.dump())#?
             w = Imported_Wallet(self.storage)
             for x in keystore.get_private_keys(text):
                 w.import_private_key(x, None)
@@ -192,6 +195,7 @@ class BaseWizard(object):
 
     def restore_from_key(self):
         if self.wallet_type == 'qtcore':
+            #Qtum的方法
             v = keystore.is_xprv
             title = _("Create keystore from a master key")
             message = ' '.join([
@@ -212,7 +216,7 @@ class BaseWizard(object):
 
     def on_restore_from_key(self, text):
         if self.wallet_type == 'qtcore':
-            k = keystore.from_qt_core_master_key(text)
+            k = keystore.from_qt_core_master_key(text)#专门针对Qtum
         else:
             k = keystore.from_master_key(text)
         self.on_keystore(k)
@@ -295,13 +299,10 @@ class BaseWizard(object):
             self.choose_hw_device(purpose)
             return
         if purpose == HWD_SETUP_NEW_WALLET:
-            if self.wallet_type == 'multisig':
-                # There is no general standard for HD multisig.
-                # This is partially compatible with BIP45; assumes index=0
-                self.on_hw_derivation(name, device_info, "m/45'/0")
-            else:
-                f = lambda x: self.run('on_hw_derivation', name, device_info, str(x))
-                self.derivation_dialog(f)
+            def f(derivation, script_type):
+                self.run('on_hw_derivation', name, device_info, derivation, script_type)
+            self.derivation_and_script_type_dialog(f)
+
         elif purpose == HWD_SETUP_DECRYPT_WALLET:
             derivation = get_derivation_used_for_hw_device_encryption()
             xpub = self.plugin.get_xpub(device_info.device.id_, derivation, 'standard', self)
@@ -318,30 +319,41 @@ class BaseWizard(object):
         else:
             raise Exception('unknown purpose: %s' % purpose)
 
-    def derivation_dialog(self, f):
-        default = bip44_derivation(0, bip43_purpose=44)
-        message = '\n'.join([
-            _('Enter your wallet derivation here.'),
+    def derivation_and_script_type_dialog(self, f):
+        #?
+        message1 = _('Choose the type of addresses in your wallet.')
+        message2 = '\n'.join([
+            _('You can override the suggested derivation path.'),
             _('If you are not sure what this is, leave this field unchanged.')
         ])
-        presets = (
-            ('legacy BIP44', bip44_derivation(0, bip43_purpose=44)),
-            ('p2sh-segwit BIP49', bip44_derivation(0, bip43_purpose=49)),
-            ('native-segwit BIP84', bip44_derivation(0, bip43_purpose=84)),
-        )
+        if self.wallet_type == 'multisig':
+            # There is no general standard for HD multisig.
+            # For legacy, this is partially compatible with BIP45; assumes index=0
+            # For segwit, a custom path is used, as there is no standard at all.
+            choices = [
+                ('standard',   'legacy multisig (p2sh)',            "m/45'/0"),
+                ('p2wsh-p2sh', 'p2sh-segwit multisig (p2wsh-p2sh)', purpose48_derivation(0, xtype='p2wsh-p2sh')),
+                ('p2wsh',      'native segwit multisig (p2wsh)',    purpose48_derivation(0, xtype='p2wsh')),
+            ]
+        else:
+            choices = [
+                ('standard',    'legacy (p2pkh)',            bip44_derivation(0, bip43_purpose=44)),
+                ('p2wpkh-p2sh', 'p2sh-segwit (p2wpkh-p2sh)', bip44_derivation(0, bip43_purpose=49)),
+                ('p2wpkh',      'native segwit (p2wpkh)',    bip44_derivation(0, bip43_purpose=84)),
+            ]
         while True:
             try:
-                self.line_dialog(run_next=f, title=_('Derivation'), message=message,
-                                 default=default, test=bitcoin.is_bip32_derivation,
-                                 presets=presets)
+                self.choice_and_line_dialog(
+                    run_next=f, title=_('Script type and Derivation path'), message1=message1,
+                    message2=message2, choices=choices, test_text=bitcoin.is_bip32_derivation)
                 return
             except ScriptTypeNotSupported as e:
                 self.show_error(e)
                 # let the user choose again
 
-    def on_hw_derivation(self, name, device_info, derivation):
+    def on_hw_derivation(self, name, device_info, derivation, xtype):
+        #硬件验证
         from .keystore import hardware_keystore
-        xtype = keystore.xtype_from_derivation(derivation)
         try:
             xpub = self.plugin.get_xpub(device_info.device.id_, derivation, xtype, self)
         except BaseException as e:
@@ -386,6 +398,7 @@ class BaseWizard(object):
         if self.wallet_type == 'mobile':
             self.seed_type = 'standard'
         else:
+            #判断种子类型
             self.seed_type = 'bip39' if is_bip39 else bitcoin.seed_type(seed)
 
         if self.seed_type == 'bip39':
@@ -407,8 +420,9 @@ class BaseWizard(object):
             raise Exception('Unknown seed type', self.seed_type)
 
     def on_restore_bip39(self, seed, passphrase):
-        f = lambda x: self.run('on_bip43', seed, passphrase, str(x))
-        self.derivation_dialog(f)
+        def f(derivation, script_type):
+            self.run('on_bip43', seed, passphrase, derivation, script_type)
+        self.derivation_and_script_type_dialog(f)
 
     def create_keystore(self, seed, passphrase):
         if self.wallet_type == 'mobile':
@@ -417,8 +431,8 @@ class BaseWizard(object):
             k = keystore.from_seed(seed, passphrase, self.wallet_type == 'multisig')
         self.on_keystore(k)
 
-    def on_bip43(self, seed, passphrase, derivation):
-        k = keystore.from_bip39_seed(seed, passphrase, derivation)
+    def on_bip43(self, seed, passphrase, derivation, script_type):
+        k = keystore.from_bip39_seed(seed, passphrase, derivation, xtype=script_type)
         self.on_keystore(k)
 
     def on_keystore(self, k):
@@ -464,6 +478,7 @@ class BaseWizard(object):
                 self.run('create_wallet')
 
     def create_wallet(self):
+        #只要keystores中有一个passwoed,encrypt_keystore就是True
         encrypt_keystore = any(k.may_have_password() for k in self.keystores)
         # note: the following condition ("if") is duplicated logic from
         # wallet.get_available_storage_encryption_version()

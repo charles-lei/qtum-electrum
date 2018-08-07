@@ -79,6 +79,16 @@ class FileExportFailed(Exception):
         return _("Failed to export to file.") + "\n" + self.message
 
 
+class TimeoutException(Exception):
+    def __init__(self, message=''):
+        self.message = str(message)
+
+    def __str__(self):
+        if not self.message:
+            return _("Operation timed out.")
+        return self.message
+
+
 class WalletFileException(Exception): pass
 
 
@@ -112,9 +122,9 @@ class Fiat(object):
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         from .transaction import Transaction
-        if isinstance(obj, Transaction):
+        if isinstance(obj, Transaction):#obj是交易的实例
             return obj.as_dict()
-        if isinstance(obj, set):
+        if isinstance(obj, set):#是集合实例
             return list(obj)
         return super(MyEncoder, self).default(obj)
 

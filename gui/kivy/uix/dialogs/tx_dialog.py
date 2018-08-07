@@ -13,7 +13,7 @@ Builder.load_string('''
 
 <TxDialog>
     id: popup
-    title: _('Transaction123')
+    title: _('Transaction')
     is_mine: True
     can_sign: False
     can_broadcast: False
@@ -61,10 +61,10 @@ Builder.load_string('''
                     size_hint: 1, None
                     id: output_list
                 TopLabel:
-                    text: _('Transaction345 ID') + ':' if root.tx_hash else ''
+                    text: _('Transaction ID') + ':' if root.tx_hash else ''
                 TxHashLabel:
                     data: root.tx_hash
-                    name: _('Transaction234 ID')
+                    name: _('Transaction ID')
         Widget:
             size_hint: 1, 0.1
 
@@ -74,7 +74,7 @@ Builder.load_string('''
             Button:
                 size_hint: 0.5, None
                 height: '48dp'
-                text: _('Sig2') if root.can_sign else _('Broadcast') if root.can_broadcast else _('Bump fee') if root.can_rbf else ''
+                text: _('Sign') if root.can_sign else _('Broadcast') if root.can_broadcast else _('Bump fee') if root.can_rbf else ''
                 disabled: not(root.can_sign or root.can_broadcast or root.can_rbf)
                 opacity: 0 if self.disabled else 1
                 on_release:
@@ -157,8 +157,7 @@ class TxDialog(Factory.Popup):
         self.app.protected(_("Enter your PIN code in order to sign this transaction"), self._do_sign, ())
 
     def _do_sign(self, password):
-        self.status_str = _('wSignin') + '...'
-        self.app.show_error(_("test wang"))
+        self.status_str = _('Signing') + '...'
         Clock.schedule_once(lambda dt: self.__do_sign(password), 0.1)
 
     def __do_sign(self, password):

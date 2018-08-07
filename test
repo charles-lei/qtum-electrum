@@ -1,0 +1,6 @@
+from . import debug_info
+#import qtum_electrum
+
+text = 'sddfaaf'
+
+debug_info.debug_info_func(text)

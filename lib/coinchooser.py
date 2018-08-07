@@ -109,18 +109,20 @@ def strip_unneeded_utxo(bkts, sufficient_funds):
 class CoinChooserBase(PrintError):
 
     def keys(self, coins):
-        raise NotImplementedError
+        raise NotImplementedError # 这是一个预留的方法,要求他必须在子类中实现,
+        # 如果在子类中不实现,那么程序就会报错
 
     def bucketize_coins(self, coins):
-        keys = self.keys(coins)
-        buckets = defaultdict(list)
+        keys = self.keys(coins)#  keys方法在子类中进行了重写 ,Qtum得到地址
+        buckets = defaultdict(list)#defaultdict类的初始化函数接受一个类型作为参数，
+                                  # 当所访问的键不存在的时候，可以实例化一个值作为默认值
         for key, coin in zip(keys, coins):
-            buckets[key].append(coin)
+            buckets[key].append(coin)#{key->str : coin}
 
         def make_Bucket(desc, coins):
             weight = sum(Transaction.estimated_input_weight(coin)
                          for coin in coins)
-            size = Transaction.virtual_size_from_weight(weight)
+            size = Transaction.virtual_size_from_weight(weight)#
             value = sum(coin['value'] for coin in coins)
             return Bucket(desc, size, value, coins)
 
@@ -201,10 +203,12 @@ class CoinChooserBase(PrintError):
         added to the transaction fee.'''
 
         # Deterministic randomness from coins
+        #源于coins的确定随机
         utxos = [c['prevout_hash'] + str(c['prevout_n']) for c in coins]
         self.p = PRNG(''.join(sorted(utxos)))
 
         # Copy the ouputs so when adding change we don't modify "outputs"
+        #创建了一个没有输入和找零的tx
         tx = Transaction.from_io([], outputs[:])
         # Size of the transaction with no inputs and no change
         base_size = tx.estimated_size()
@@ -213,23 +217,27 @@ class CoinChooserBase(PrintError):
         def sufficient_funds(buckets):
             '''Given a list of buckets, return True if it has enough
             value to pay for the transaction'''
-            total_input = sum(bucket.value for bucket in buckets)
+            total_input = sum(bucket.value for bucket in buckets)#所有的输入
+            # buckets所有的大小 + 基础大小
             total_size = sum(bucket.size for bucket in buckets) + base_size
+            #判断UTXO够不够用
             return total_input >= spent_amount + fee_estimator(total_size)
 
         # Collect the coins into buckets, choose a subset of the buckets
-        buckets = self.bucketize_coins(coins)
+        buckets = self.bucketize_coins(coins)#?
+        #bucket中包含了要花费UTXO的地址
         buckets = self.choose_buckets(buckets, sufficient_funds,
                                       self.penalty_func(tx), sender)
 
-        tx.add_inputs([coin for b in buckets for coin in b.coins])
+        tx.add_inputs([coin for b in buckets for coin in b.coins])#添加输入
         tx_size = base_size + sum(bucket.size for bucket in buckets)
 
         # This takes a count of change outputs and returns a tx fee;
         # each pay-to-bitcoin-address output serializes as 34 bytes
         fee = lambda count: fee_estimator(tx_size + count * 34)
         change = self.change_outputs(tx, change_addrs, fee, dust_threshold)
-        tx.add_outputs(change)
+        tx.add_outputs(change)#添加找零地址
+        #至此,tx中已经包括了输入,输出和找零地址
 
         self.print_error("using %d inputs" % len(tx.inputs()))
         self.print_error("using buckets:", [bucket.desc for bucket in buckets])
@@ -237,7 +245,7 @@ class CoinChooserBase(PrintError):
         return tx
 
     def choose_buckets(self, buckets, sufficient_funds, penalty_func, sender=None):
-        raise NotImplemented('To be subclassed')
+        raise NotImplemented('To be subclassed')#子类中要用
 
 
 class CoinChooserOldestFirst(CoinChooserBase):
@@ -346,11 +354,14 @@ class CoinChooserQtum(CoinChooserBase):
     def choose_buckets(self, buckets, sufficient_funds, penalty_func, sender=None):
         '''Spend the oldest buckets first.'''
         # Unconfirmed coins are young, not old
-        adj_height = lambda height: 99999999 if height <= 0 else height
+        adj_height = lambda height: 99999999 if height <= 0 else height#高度小于0
+        # 对bucket里面的所有数据排序,?按照区块高度排列
+        print('debug::before_sort',buckets)
         buckets.sort(key=lambda b: max(adj_height(coin['height'])
                                        for coin in b.coins))
+        print('debug::after_sort',buckets)
         selected = []
-        if sender:
+        if sender:#?
             for bucket in buckets:
                 if bucket.desc == sender:
                     selected.append(bucket)
