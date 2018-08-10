@@ -486,6 +486,13 @@ class TrezorPlugin(HW_PluginBase):
                     script_type=script_type)
             return txoutputtype
 
+        def add_testnet_mainnet_prefix(script):
+            if constants.net == constants.QtumTestnet:
+                script = '02' + script
+            elif constants.net == constants.QtumMainnet:
+                script = '01' + script
+            return script
+        
         def create_output_by_address():
             # qtum diff
             txoutputtype = self.types.TxOutputType()
@@ -494,7 +501,8 @@ class TrezorPlugin(HW_PluginBase):
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
                 #txoutputtype.op_return_data = address[2:]
                 #txoutputtype.op_return_data = trezor_validate_op_return_output_and_get_data(_type,address,amount)
-                txoutputtype.op_return_data = bfh(address[:])
+                pre_address = add_testnet_mainnet_prefix(address)
+                txoutputtype.op_return_data = bfh(pre_address[:])
             elif _type == TYPE_ADDRESS:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
                 #txoutputtype.address = qtum_addr_to_bitcoin_addr(address)
