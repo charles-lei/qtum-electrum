@@ -1390,6 +1390,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not r:
             return
         outputs, fee, tx_desc, coins = r
+        #####自己添加的代码#####
+        for i,output in enumerate(outputs):
+            tp, addr, _amount = output
+            if tp == TYPE_SCRIPT:
+                addr = addr[4:]
+                outputs[i] = (tp, addr, _amount)
+            elif tp == TYPE_ADDRESS:
+                continue
+        #####自己添加的代码#####
         try:
             is_sweep = bool(self.tx_external_keypairs)
             tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, is_sweep=is_sweep)
@@ -3148,7 +3157,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             outputs = [(TYPE_SCRIPT, script, 0), ]
             tx_desc = 'pay out {} {}'.format(amount / (10 ** token.decimals), token.symbol)
             self._smart_contract_broadcast(outputs, tx_desc, gas_limit * gas_price, token.bind_addr, dialog)
-
+            #####自己添加的代码#####
+            print("Token_script:",script)
+            #####自己添加的代码#####
         except (BaseException,) as e:
             traceback.print_exc(file=sys.stderr)
             dialog.show_message(str(e))
