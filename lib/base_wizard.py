@@ -264,9 +264,14 @@ class BaseWizard(object):
         self.devices = devices
         choices = []
         for name, info in devices:
+            #todo list: there needs to modify with firmware
+            if name == "trezor":
+                name_ = 'bitsafe'
+            else:
+                name_ = name
             state = _("initialized") if info.initialized else _("wiped")
             label = info.label or _("An unnamed %s")%name
-            descr = "%s [%s, %s]" % (label, name, state)
+            descr = "%s [%s, %s]" % (label, name_, state)
             choices.append(((name, info), descr))
         msg = _('Select a device') + ':'
         self.choice_dialog(title=title, message=msg, choices=choices,

@@ -12,7 +12,7 @@ from qtum_electrum.transaction import deserialize, Transaction
 from qtum_electrum.keystore import Hardware_KeyStore, is_xpubkey, parse_xpubkey, xtype_from_derivation
 from qtum_electrum.base_wizard import ScriptTypeNotSupported
 from ..hw_wallet import HW_PluginBase
-from ..hw_wallet.plugin import is_any_tx_output_on_change_branch
+from ..hw_wallet.plugin import is_any_tx_output_on_change_branch, trezor_validate_op_return_output_and_get_data
 
 # TREZOR initialization methods
 TIM_NEW, TIM_RECOVER, TIM_MNEMONIC, TIM_PRIVKEY = range(0, 4)
@@ -23,8 +23,10 @@ SCRIPT_GEN_LEGACY, SCRIPT_GEN_P2SH_SEGWIT, SCRIPT_GEN_NATIVE_SEGWIT = range(0, 3
 
 
 class TrezorKeyStore(Hardware_KeyStore):
-    hw_type = 'trezor'
-    device = 'TREZOR'
+    #hw_type = 'trezor'
+    hw_type = 'bitsafe'
+    #device = 'TREZOR'
+    device = "BitSafe"
 
     def get_derivation(self):
         return self.derivation
@@ -101,11 +103,11 @@ class TrezorPlugin(HW_PluginBase):
                 # python-trezor only introduced __version__ in 0.9.0
                 library_version = 'unknown'
             if library_version == 'unknown' or \
-                    versiontuple(library_version) < self.minimum_library:
+                            versiontuple(library_version) < self.minimum_library:
                 self.libraries_available_message = (
-                        _("Library version for '{}' is too old.").format(name)
-                        + '\nInstalled: {}, Needed: {}'
-                        .format(library_version, self.minimum_library))
+                    _("Library version for '{}' is too old.").format(name)
+                    + '\nInstalled: {}, Needed: {}'
+                    .format(library_version, self.minimum_library))
                 self.print_stderr(self.libraries_available_message)
                 raise ImportError()
             self.libraries_available = True
@@ -193,10 +195,12 @@ class TrezorPlugin(HW_PluginBase):
         devmgr = self.device_manager()
         client = devmgr.client_by_id(device_id)
         model = client.get_trezor_model()
+
         def f(method):
             import threading
             settings = self.request_trezor_init_settings(wizard, method, model)
-            t = threading.Thread(target=self._initialize_device_safe, args=(settings, method, device_id, wizard, handler))
+            t = threading.Thread(target=self._initialize_device_safe,
+                                 args=(settings, method, device_id, wizard, handler))
             t.setDaemon(True)
             t.start()
             exit_code = wizard.loop.exec_()
@@ -205,6 +209,7 @@ class TrezorPlugin(HW_PluginBase):
                 # of leaving the device in an initialized state when finishing.
                 # signal that this is not the case:
                 raise UserCancelled()
+
         wizard.choice_dialog(title=_('Initialize Device'), message=msg, choices=choices, run_next=f)
 
     def _initialize_device_safe(self, settings, method, device_id, wizard, handler):
@@ -454,16 +459,26 @@ class TrezorPlugin(HW_PluginBase):
                     script_type=script_type)
             return txoutputtype
 
+        #####自己添加的代码为了在Trezor上显示前缀#####
+        def add_testnet_mainnet_prefix(script):
+            if constants.net == constants.QtumTestnet:
+                script = '02' + script
+            elif constants.net == constants.QtumMainnet:
+                script = '01' + script
+            return script
+
         def create_output_by_address():
             # qtum diff
             txoutputtype = self.types.TxOutputType()
             txoutputtype.amount = amount
             if _type == TYPE_SCRIPT:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
-                txoutputtype.op_return_data = address[2:]
+                # txoutputtype.op_return_data = address[2:]
+                pre_address = add_testnet_mainnet_prefix(address[:])
+                txoutputtype.op_return_data = trezor_validate_op_return_output_and_get_data(_type, pre_address, amount)
             elif _type == TYPE_ADDRESS:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
-                #txoutputtype.address = qtum_addr_to_bitcoin_addr(address)
+                # txoutputtype.address = qtum_addr_to_bitcoin_addr(address)
                 txoutputtype.address = address
             return txoutputtype
 

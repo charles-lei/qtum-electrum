@@ -54,5 +54,6 @@
     <file>icons/unlock.png</file>
     <file>icons/warning.png</file>
     <file>icons/zoom.png</file>
+    <file>icons/bitsafe_logo.png</file>
   </qresource>
 </RCC>
